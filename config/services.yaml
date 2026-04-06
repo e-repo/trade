@@ -1,0 +1,61 @@
+parameters:
+    app.email: '%env(APP_EMAIL)%'
+    app.timezone: 'Europe/Moscow'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        bind:
+            bool $isDebug: '%kernel.debug%'
+            string $appEmail: '%app.email%'
+            string $timezone: '%app.timezone%'
+
+    _instanceof:
+        CoreKit\Application\Bus\CommandHandlerInterface:
+            tags:
+                - { name: messenger.message_handler, bus: command.bus }
+
+        CoreKit\Application\Bus\QueryHandlerInterface:
+            tags:
+                - { name: messenger.message_handler, bus: query.bus }
+
+        CoreKit\Application\Bus\EventListenerInterface:
+            tags:
+                - { name: messenger.message_handler, bus: event.bus }
+
+    # Modules
+    SomeModule\:
+        resource: '../src/SomeModule'
+        exclude:
+            - '../src/SomeModule/{Kernel.php,*Dto.php}'
+            - '../src/SomeModule/{Entity,Enum,Event}'
+
+    CoreKit\:
+        resource: '../src/CoreKit'
+        exclude:
+            - '../src/CoreKit/{Kernel.php,*Dto.php}'
+            - '../src/CoreKit/{Entity,Enum,Event}'
+
+    # Subscriber and Listeners
+    CoreKit\UI\Http\Listener\ExceptionListener:
+        tags: [ { name: 'kernel.event_listener', event: kernel.exception, priority: 10 } ]
+
+    CoreKit\UI\Http\Listener\ResponseListener:
+        tags: [ { name: 'kernel.event_listener' } ]
+
+    CoreKit\Application\Listener\ORMEventListener:
+        tags:
+            - { name: doctrine.event_listener, event: onFlush }
+
+    # Another services
+    CoreKit\UI\Http\Exception\Resolver:
+        arguments: [ '%exceptions%' ]
+
+    CoreKit\UI\Http\Request\RequestArgumentResolver:
+        tags:
+            - { name: controller.argument_value_resolver, priority: 150 }
+
+    CoreKit\Infra\FixPostgreSQLDefaultSchemaListener:
+        tags:
+            - { name: doctrine.event_listener, event: postGenerateSchema }

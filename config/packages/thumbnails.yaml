@@ -1,0 +1,9 @@
+parameters:
+    thumbnails:
+        blog:
+            post:
+                # 4:3
+                width: 400
+                height: 300
+
+        shop:

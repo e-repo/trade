@@ -1,0 +1,11 @@
+{% extends 'mail.html.twig' %}
+{% block body %}
+    {% set url = "#{domain}/confirm-email?userId=#{userId}&token=#{token}" %}
+
+    <h1>Здравствуйте!</h1>
+
+    <p>
+        Для подтверждения вашей электронной почты при регистрации в сервисе <b>{{ domain }}</b> перейдите по <b><a href="{{ url }}">ССЫЛКЕ</a></b>:
+    </p>
+
+{% endblock %}

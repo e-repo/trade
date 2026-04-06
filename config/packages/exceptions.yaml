@@ -1,0 +1,8 @@
+parameters:
+    exceptions:
+        CoreKit\Domain\Exception\NotFoundException: { code: 404, hidden: false }
+        # Symfony Exception
+        Symfony\Component\Security\Core\Exception\AccessDeniedException: { code: 403, hidden: false }
+        # PHP Exception (проверяются последними т.к при сопоставлении используется is_subclass_of())
+        RuntimeException: { code: 400, hidden: false }
+        DomainException: { code: 422, hidden: false }

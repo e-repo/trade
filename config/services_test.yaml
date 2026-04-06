@@ -1,0 +1,7 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    Test\:
+        resource: '%kernel.project_dir%/tests/Test/**/*Fixture.php'
