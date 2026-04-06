@@ -49,6 +49,7 @@
   },
   "autoload": {
     "psr-4": {
+      "Trade\\": "src/Trade",
       "SomeModule\\": "src/SomeModule",
       "CoreKit\\": "src/CoreKit"
     }

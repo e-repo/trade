@@ -20,6 +20,11 @@ doctrine:
                 JSON_GET: Scienta\DoctrineJsonFunctions\Query\AST\Functions\Postgresql\JsonGet
                 JSON_GET_TEXT: Scienta\DoctrineJsonFunctions\Query\AST\Functions\Postgresql\JsonGetText
         mappings:
+            Trade:
+                type: attribute
+                is_bundle: false
+                dir: '%kernel.project_dir%/src/Trade/Domain'
+                prefix: 'Trade'
             SomeModule:
                 type: attribute
                 is_bundle: false

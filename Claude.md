@@ -358,8 +358,9 @@ php bin/phpunit --testsuite=Integration             # Run integration tests
 ```bash
 make be-init              # Full initialization: build, install deps, migrations
 make b-up                 # Start all backend services
-make b-shell              # Enter CLI container
+make b-shell              # Enter CLI container (sh)
 make down                 # Stop all containers
+make ps                   # Show running containers status
 ```
 
 ### Service Access
@@ -368,18 +369,39 @@ make down                 # Stop all containers
 - **MailHog**: http://localhost:8025
 - **PostgreSQL**: localhost:54321 (user: app, db: app)
 
-### Inside CLI Container
+### Development Commands (from Host)
+```bash
+# Container management
+make b-up                          # Start backend services (postgres, php-fpm, php-cli, nginx, mailer)
+make down                          # Stop all containers
+make ps                            # Show container status
+make b-shell                       # Enter CLI container
+
+# Setup & Installation
+make be-init                       # Full project initialization (pull, build, up, install, migrations)
+make t-composer-install            # Install composer dependencies
+make t-wait-db                     # Wait for database to be ready
+
+# Database
+make t-migrations                  # Apply all pending migrations
+docker compose run --rm php-cli php bin/console do:mi:diff              # Generate new migration
+docker compose run --rm php-cli php bin/console doctrine:schema:validate
+
+# Testing
+make t-test                        # Run all tests via PHPUnit
+docker compose run --rm php-cli php bin/phpunit --filter=SomeTest      # Run specific test
+
+# Permissions
+make b-chown                       # Fix file ownership (sets to UID 1000)
+```
+
+### Inside CLI Container (after `make b-shell`)
 ```bash
 php bin/console cache:clear                         # Clear cache
 php bin/phpunit                                     # Run tests
 php bin/console do:mi:mi --no-interaction           # Apply migrations
-```
-
-### From Host
-```bash
-make t-test               # Run tests from outside container
-make t-migrations         # Apply migrations from outside
-make t-composer-install   # Install composer dependencies
+php bin/console do:mi:diff                          # Generate migration
+php bin/console doctrine:query:sql "SELECT * FROM trade.cargo_type"
 ```
 
 ## Code Quality

@@ -25,6 +25,12 @@ services:
                 - { name: messenger.message_handler, bus: event.bus }
 
     # Modules
+    Trade\:
+        resource: '../src/Trade'
+        exclude:
+            - '../src/Trade/{Kernel.php,*Dto.php}'
+            - '../src/Trade/{Entity,Enum,Event,ValueObject}'
+
     SomeModule\:
         resource: '../src/SomeModule'
         exclude:
