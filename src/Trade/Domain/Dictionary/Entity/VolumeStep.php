@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Trade\Domain\Trade\Entity;
+namespace Trade\Domain\Dictionary\Entity;
 
 use CoreKit\Domain\Entity\Id;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Trade\Infra\Trade\Repository\VolumeStepRepository;
+use Trade\Infra\Dictionary\Repository\VolumeStepRepository;
 
 #[ORM\Entity(repositoryClass: VolumeStepRepository::class)]
 #[ORM\Table(schema: 'trade')]

@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Trade\Infra\Trade\Repository;
+namespace Trade\Infra\Dictionary\Repository;
 
 use CoreKit\Domain\Exception\NotFoundException;
-use CoreKit\Domain\ValueObject\Id;
+use CoreKit\Domain\Entity\Id;
 use Doctrine\ORM\EntityManagerInterface;
-use Trade\Domain\Trade\Entity\Contractor;
-use Trade\Domain\Trade\Repository\ContractorRepositoryInterface;
+use Trade\Domain\Dictionary\Entity\Contractor;
+use Trade\Domain\Dictionary\Repository\ContractorRepositoryInterface;
 
 final class ContractorRepository implements ContractorRepositoryInterface
 {

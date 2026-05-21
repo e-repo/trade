@@ -39,6 +39,7 @@ Module/
 ## Project Structure
 
 ### Current Modules
+- `Trade` - Trade auction service (main business module)
 - `SomeModule` - Example module with Category aggregate (will be removed)
 - `CoreKit` - Shared utilities and interfaces for all modules
 
@@ -46,6 +47,7 @@ Module/
 ```json
 "autoload": {
     "psr-4": {
+        "Trade\\": "src/Trade",
         "SomeModule\\": "src/SomeModule",
         "CoreKit\\": "src/CoreKit"
     }
@@ -53,9 +55,33 @@ Module/
 ```
 
 ### Database Schemas
+- `trade` - Trade module tables
 - `module` - SomeModule tables
 - `corekit` - CoreKit shared tables
 - Migrations organized by module in `migrations/{Module}/`
+
+### Trade Module Structure
+```
+Trade/
+├── UI/
+│   ├── Http/V1/          # HTTP endpoints (Actions, Request/Response DTOs)
+│   └── Console/          # Console commands
+├── Application/          # Commands, Queries, Handlers
+├── Domain/
+│   ├── Dictionary/       # Reference entities (справочники)
+│   │   ├── Entity/       # CargoType, Contractor, VolumeStep
+│   │   └── Repository/   # Repository interfaces
+│   └── Lot/              # Lot aggregate
+│       ├── Entity/       # Lot entity
+│       ├── Repository/   # LotRepositoryInterface
+│       ├── Enum/         # LotStatusEnum, CloseReasonEnum
+│       └── ValueObject/  # Volume, Price, LotTermination
+└── Infra/
+    ├── Dictionary/
+    │   └── Repository/   # Repository implementations for dictionaries
+    └── Lot/
+        └── Repository/   # LotRepository implementation
+```
 
 ## Code Patterns & Examples
 

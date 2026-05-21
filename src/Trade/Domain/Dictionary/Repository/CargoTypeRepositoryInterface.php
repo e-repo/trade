@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Trade\Domain\Trade\Repository;
+namespace Trade\Domain\Dictionary\Repository;
 
-use CoreKit\Domain\ValueObject\Id;
-use Trade\Domain\Trade\Entity\CargoType;
+use CoreKit\Domain\Entity\Id;
+use Trade\Domain\Dictionary\Entity\CargoType;
 
 interface CargoTypeRepositoryInterface
 {

@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Trade\Domain\Trade\Entity;
+namespace Trade\Domain\Dictionary\Entity;
 
 use CoreKit\Domain\Entity\Id;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
-use Trade\Infra\Trade\Repository\CargoTypeRepository;
+use Trade\Infra\Dictionary\Repository\CargoTypeRepository;
 
 #[ORM\Entity(repositoryClass: CargoTypeRepository::class)]
 #[ORM\Table(schema: 'trade')]

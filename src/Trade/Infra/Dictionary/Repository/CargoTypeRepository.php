@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Trade\Infra\Trade\Repository;
+namespace Trade\Infra\Dictionary\Repository;
 
 use CoreKit\Domain\Exception\NotFoundException;
-use CoreKit\Domain\ValueObject\Id;
+use CoreKit\Domain\Entity\Id;
 use Doctrine\ORM\EntityManagerInterface;
-use Trade\Domain\Trade\Entity\CargoType;
-use Trade\Domain\Trade\Repository\CargoTypeRepositoryInterface;
+use Trade\Domain\Dictionary\Entity\CargoType;
+use Trade\Domain\Dictionary\Repository\CargoTypeRepositoryInterface;
 
 final class CargoTypeRepository implements CargoTypeRepositoryInterface
 {
