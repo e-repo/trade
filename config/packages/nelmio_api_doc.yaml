@@ -1,8 +1,8 @@
 nelmio_api_doc:
     documentation:
         info:
-            title: API интернет блога защиты растений
-            description: Документация к API интернет блога защиты растений
+            title: API сервиса торгов за перевозку
+            description: Документация к API сервиса торгов за перевозку
             version: 1.0.0
         components:
             securitySchemes:

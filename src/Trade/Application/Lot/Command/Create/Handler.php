@@ -37,7 +37,7 @@ final readonly class Handler implements CommandHandlerInterface
         $this->lotRepository->add($lot);
 
         return new Result(
-            lotId: $lot->getId()->getValue(),
+            lotId: $lot->getId()->value,
             status: $lot->getStatus()->value,
         );
     }

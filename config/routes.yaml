@@ -1,3 +1,7 @@
 some_module_controllers:
     resource: ../src/SomeModule/UI/Http
     type: attribute
+
+trade_controllers:
+    resource: ../src/Trade/UI/Http
+    type: attribute

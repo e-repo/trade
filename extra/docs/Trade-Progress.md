@@ -2,8 +2,8 @@
 
 ## 📍 Текущий статус разработки
 
-**Дата последнего обновления:** 2026-05-21
-**Текущий этап:** Реорганизация структуры завершена. Начинаем реализацию Endpoint #1 (Domain Layer)
+**Дата последнего обновления:** 2026-05-25
+**Текущий этап:** Endpoint #1 (POST /api/v1/trade/lot) - полностью завершен (реализация + тесты). Готов к Endpoint #2
 
 ---
 
@@ -54,98 +54,148 @@
 
 5. **Doctrine Schema**
    - ✅ Валидация пройдена: `doctrine:schema:validate` - OK
-   - ✅ В `config/packages/doctrine.yaml` закомментирован mapping для `SomeModule`
+   - ✅ В `config/packages/doctrine.yaml` удален mapping для `SomeModule` (чтобы не генерировать его таблицы в Trade миграциях)
 
 6. **Документация**
    - ✅ `CLAUDE.md` обновлен с новой структурой Trade модуля
 
 ---
 
-## ❌ Что НЕ реализовано
+## ✅ Endpoint #1: POST /api/v1/trade/lot (ПОЛНОСТЬЮ ЗАВЕРШЕН)
 
-### Endpoint #1: POST /api/v1/trade/lot (NOT STARTED)
+**Статус:** ✅ **ЗАВЕРШЕН: РЕАЛИЗАЦИЯ + ТЕСТИРОВАНИЕ (2026-05-25)**
 
-**Статус:** ❌ НЕ РЕАЛИЗОВАН в текущей ветке
+**Что реализовано:**
 
-#### Что нужно реализовать:
+### 1. Domain Layer ✅
 
-**1. Domain Layer (Lot Aggregate)**
+- ✅ **Enums** (`src/Trade/Domain/Lot/Enum/`):
+  - `LotStatusEnum` (CREATED, OPEN, CLOSED)
+  - `CloseReasonEnum` (EXPIRED, MANUAL)
 
-- **Enums:**
-  - `Trade\Domain\Lot\Enum\LotStatusEnum` (CREATED, OPEN, CLOSED)
-  - `Trade\Domain\Lot\Enum\CloseReasonEnum` (EXPIRED, MANUAL)
+- ✅ **Value Objects** (`src/Trade/Domain/Lot/ValueObject/`):
+  - `Volume` - управление объёмом с инвариантами:
+    - Максимум 100,000 тонн
+    - Кратность volumeStep
+    - Метод `reserve(int)` с валидацией
+    - Методы: `getTotalVolume()`, `getReservedVolume()`, `getFreeVolume()`
+  - `Price` - стартовая цена и шаг (в копейках)
+    - Методы: `getStartPrice()`, `getPriceStep()`
+  - `LotTermination` - время закрытия и причина
+    - Методы: `getClosesAt()`, `getCloseReason()`, `close(CloseReasonEnum)`
 
-- **Value Objects (Embeddables):**
-  - `Trade\Domain\Lot\ValueObject\Volume` - управление объёмом (total, reserved, free)
-    - **Инварианты:** максимум 100,000 тонн, кратность volumeStep
-  - `Trade\Domain\Lot\ValueObject\Price` - цены (start, step)
-  - `Trade\Domain\Lot\ValueObject\LotTermination` - завершение (closesAt, closeReason)
+- ✅ **Entity** (`src/Trade/Domain/Lot/Entity/Lot.php`):
+  - Aggregate Root с индексами: `idx_lot_status`, `idx_lot_opens_at`, `idx_lot_closes_at`
+  - Конструктор с валидацией дат (opensAt < closesAt, closesAt в будущем)
+  - Foreign keys на CargoType и VolumeStep
+  - Методы: `getId()`, `getStatus()`, `getFreeVolume()`, `canAcceptBids()`
+  - Статус по умолчанию: CREATED
 
-- **Entity:**
-  - `Trade\Domain\Lot\Entity\Lot` - агрегат лота
-    - Конструктор с валидацией дат
-    - Методы: `getId()`, `getStatus()`, `canAcceptBids()`, `getFreeVolume()`
+- ✅ **Repository Interface** (`src/Trade/Domain/Lot/Repository/LotRepositoryInterface.php`):
+  - `add(Lot): void`
+  - `get(Id): Lot`
 
-- **Repository Interface:**
-  - `Trade\Domain\Lot\Repository\LotRepositoryInterface`
-    - `add(Lot): void`
-    - `get(Id): Lot`
+### 2. Infra Layer ✅
 
-**2. Infra Layer**
+- ✅ **LotRepository** (`src/Trade/Infra/Lot/Repository/LotRepository.php`):
+  - Реализует LotRepositoryInterface
+  - Использует EntityManagerInterface
+  - Метод `get()` бросает NotFoundException если лот не найден
 
-- **Repository Implementation:**
-  - `Trade\Infra\Lot\Repository\LotRepository`
+### 3. Application Layer ✅
 
-**3. Application Layer**
+- ✅ **Command** (`src/Trade/Application/Lot/Command/Create/Command.php`):
+  - DTO с параметрами в camelCase
+  - Поля: cargoTypeId, totalVolume, startPrice, priceStep, volumeStepId, opensAt, closesAt
 
-- **Command:**
-  - `Trade\Application\Lot\Command\Create\Command` - DTO с параметрами (camelCase)
+- ✅ **Result** (`src/Trade/Application/Lot/Command/Create/Result.php`):
+  - Возвращаемый DTO: lotId (string), status (string)
 
-- **Result:**
-  - `Trade\Application\Lot\Command\Create\Result` - возвращаемый DTO (lotId, status)
-
-- **Handler:**
-  - `Trade\Application\Lot\Command\Create\Handler`
-  - Валидирует существование CargoType и VolumeStep
+- ✅ **Handler** (`src/Trade/Application/Lot/Command/Create/Handler.php`):
+  - Реализует CommandHandlerInterface
+  - Валидирует существование CargoType и VolumeStep через репозитории
   - Создаёт Lot в статусе CREATED
   - Возвращает Result (не доменную сущность!)
 
-**4. UI Layer (HTTP API)**
+### 4. UI Layer (HTTP API) ✅
 
-- **Request:**
-  - `Trade\UI\Http\V1\Lot\Create\Request`
+- ✅ **Request** (`src/Trade/UI/Http/V1/Lot/Create/Request.php`):
+  - Реализует RequestPayloadInterface
   - Валидации: Uuid, Positive, NotBlank
-  - OpenAPI аннотации
+  - OpenAPI аннотации с примерами
   - camelCase properties
-  - Unix timestamp (int) для opensAt/closesAt
+  - **Unix timestamp (int)** для opensAt/closesAt
 
-- **Response:**
-  - `Trade\UI\Http\V1\Lot\Create\Response`
-  - Структура: `{lotId, status}`
+- ✅ **Response** (`src/Trade/UI/Http/V1/Lot/Create/Response.php`):
+  - Реализует ResponseInterface
+  - Структура: `{lotId: string, status: string}`
 
-- **Action:**
-  - `Trade\UI\Http\V1\Lot\Create\Action`
-  - Route: `POST /api/v1/trade/lot`
-  - OpenAPI документация (tags: Trade - Lots)
+- ✅ **Action** (`src/Trade/UI/Http/V1/Lot/Create/Action.php`):
+  - Route: `POST /api/v1/trade/lot` (name: `trade_create-lot`)
+  - OpenAPI документация (tag: `Trade - Lots`)
+  - Конвертация Unix timestamp → DateTimeImmutable
   - Маппинг Result → Response
+  - Обёртка ResponseWrapper
 
-**5. Database Migration**
+### 5. Database Migration ✅
 
-- **Нужно создать миграцию для таблицы `trade.lot`:**
-  - id (UUID, PK)
-  - cargo_type_id (FK → cargo_type)
-  - total_volume, reserved_volume (Embeddable Volume)
-  - start_price, price_step (Embeddable Price)
-  - status (enum)
-  - opens_at, closes_at, close_reason (Embeddable LotTermination)
-  - volume_step_id (FK → volume_step)
-  - created_at, updated_at
-  - Индексы: `idx_lot_status`, `idx_lot_opens_at`, `idx_lot_closes_at`
+- ✅ **Version20260521073725** (`migrations/Trade/2026/05/Version20260521073725.php`):
+  - Таблица `trade.lot` создана со всеми полями
+  - Embeddables: volume (total_volume, reserved_volume), price (start_price, price_step), termination (closes_at, close_reason)
+  - Foreign keys: cargo_type_id → cargo_type, volume_step_id → volume_step
+  - Индексы: `idx_lot_status`, `idx_lot_opens_at`, `idx_lot_closes_at` ✅
+  - Миграция применена: `doctrine:schema:validate` - OK ✅
 
-**6. Тестирование**
+### 6. Integration Tests ✅
 
-- **Нужно создать фикстуры** (используя seed данные из миграций)
-- **Нужно создать интеграционные тесты** для всех сценариев валидации
+**Директория:** `tests/Test/Integration/Trade/Api/CreateLot/`
+
+**Фикстуры созданы:**
+- ✅ `CargoTypeFixture.php` - использует UUID из seed-миграции (550e8400-e29b-41d4-a716-446655440001)
+- ✅ `VolumeStepFixture.php` - использует UUID из seed-миграции (550e8400-e29b-41d4-a716-446655440010, value: 25)
+- ✅ `ContractorFixture.php` - использует UUID из seed-миграции (550e8400-e29b-41d4-a716-446655440020)
+- ✅ Базовые классы фикстур: `BaseCargoTypeFixture`, `BaseVolumeStepFixture`, `BaseContractorFixture`
+
+**Тесты реализованы (12 сценариев, 45 assertions):**
+1. ✅ `testSuccessCreateLot` - успешное создание лота (HTTP 200)
+2. ✅ `testFailedByInvalidCargoTypeUuid` - невалидный UUID cargoTypeId (HTTP 400)
+3. ✅ `testFailedByInvalidVolumeStepUuid` - невалидный UUID volumeStepId (HTTP 400)
+4. ✅ `testFailedByNegativeTotalVolume` - отрицательный totalVolume (HTTP 400)
+5. ✅ `testFailedByNegativeStartPrice` - отрицательный startPrice (HTTP 400)
+6. ✅ `testFailedByNegativePriceStep` - отрицательный priceStep (HTTP 400)
+7. ✅ `testFailedByNonExistentCargoType` - несуществующий CargoType (HTTP 404)
+8. ✅ `testFailedByNonExistentVolumeStep` - несуществующий VolumeStep (HTTP 404)
+9. ✅ `testFailedByOpensAtAfterClosesAt` - opensAt после closesAt (HTTP 422)
+10. ✅ `testFailedByOpensAtEqualsClosesAt` - opensAt равен closesAt (HTTP 422)
+11. ✅ `testFailedByClosesAtInThePast` - closesAt в прошлом (HTTP 422)
+12. ✅ `testFailedByVolumeNotMultipleOfVolumeStep` - объем не кратен volumeStep (HTTP 422)
+
+**Результат:** ✅ Все тесты проходят успешно (Tests: 12, Assertions: 45)
+
+### 7. Bug Fixes ✅
+
+- ✅ Исправлен `Handler.php:40` - изменено `$lot->getId()->getValue()` → `$lot->getId()->value`
+- ✅ Добавлена регистрация роутов Trade модуля в `config/routes.yaml`
+
+---
+
+## ⏳ Что нужно реализовать дальше (ТЕКУЩАЯ ЗАДАЧА)
+
+### Endpoint #2: POST /api/v1/trade/bid (Размещение ставки)
+
+**Статус:** ❌ НЕ НАЧАТО - следующий этап разработки
+
+**Описание:**
+Самый сложный endpoint модуля Trade. Требует реализации:
+- Bid entity с валидацией
+- Strategy Pattern для распределения объёма
+- BidCollection для управления коллекцией ставок
+- Пессимистические блокировки (SELECT ... FOR UPDATE)
+- Конкурентное распределение объёма между ставками
+
+**См. детали в:**
+- `extra/docs/Trade-Development-Plan.md` (раздел Endpoint #2)
+- `extra/docs/Auction-Algorithm-Implementation.md` (тактический DDD подход)
 
 ---
 
@@ -176,14 +226,14 @@ vendor/bin/ecs check src/Trade
 
 ## 🎯 Следующие этапы:
 
-1. **Endpoint #1:** POST /api/v1/trade/lot (Создание лота) - **ТЕКУЩАЯ ЗАДАЧА**
-   - Реализовать Domain Layer (Lot entity, Value Objects, Enums)
-   - Реализовать Application Layer (Command/Handler/Result)
-   - Реализовать UI Layer (Request/Response/Action)
-   - Создать миграцию для таблицы `trade.lot`
-   - Написать интеграционные тесты
+1. **Endpoint #1:** POST /api/v1/trade/lot - ✅ **ЗАВЕРШЕН (2026-05-25)**
+   - ✅ Логика реализована и ревью пройдено
+   - ✅ Фикстуры созданы (CargoType, VolumeStep, Contractor)
+   - ✅ Интеграционные тесты написаны (12 тестов, 45 assertions)
+   - ✅ Все тесты проходят успешно
+   - ✅ Bug fixes: Handler.php, routes.yaml
 
-2. **Endpoint #2:** POST /api/v1/trade/bid (Размещение ставки)
+2. **Endpoint #2:** POST /api/v1/trade/bid (Размещение ставки) - **СЛЕДУЮЩАЯ ЗАДАЧА**
    - Самый сложный endpoint с конкурентным распределением объёма
    - Требует реализации Bid entity, Strategy Pattern, BidCollection
    - Пессимистические блокировки (SELECT ... FOR UPDATE)
@@ -231,60 +281,56 @@ vendor/bin/ecs check src/Trade
 
 **Текущий статус:**
 - ✅ Подготовительный этап завершен (справочники: CargoType, Contractor, VolumeStep)
-- ✅ Структура модуля Trade реорганизована (2026-05-21):
-  - Trade/Domain/Dictionary/ - справочники
-  - Trade/Domain/Lot/ - агрегат Lot (готов для разработки)
-  - Trade/Infra/Dictionary/ и Trade/Infra/Lot/
-  - Все namespace обновлены
-- ✅ CLAUDE.md обновлен с новой структурой
-- ⏸️ **ОСТАНОВИЛИСЬ НА:** Начало реализации Endpoint #1 - Domain Layer
+- ✅ Структура модуля Trade реорганизована (2026-05-21)
+- ✅ Endpoint #1: POST /api/v1/trade/lot - ПОЛНОСТЬЮ ЗАВЕРШЕН (2026-05-25):
+  - ✅ Domain Layer: Enums, Value Objects (Volume, Price, LotTermination), Lot Entity
+  - ✅ Application Layer: Command, Handler, Result
+  - ✅ UI Layer: Request, Response, Action
+  - ✅ Infra Layer: LotRepository
+  - ✅ Migration: Version20260521073725 (таблица trade.lot с индексами)
+  - ✅ Интеграционные тесты: 12 тестов, 45 assertions - все проходят
+  - ✅ Bug fixes: Handler.php, routes.yaml
+- ⏸️ **ОСТАНОВИЛИСЬ НА:** Endpoint #1 завершен, готовы к Endpoint #2
 
-**Следующий шаг:**
-Начать реализацию Endpoint #1: POST /api/v1/trade/lot (создание лота)
+**Следующий шаг (ТЕКУЩАЯ ЗАДАЧА):**
+Начать разработку Endpoint #2: POST /api/v1/trade/bid (Размещение ставки)
 
-**Порядок разработки:**
-1. **Domain Layer** (ТЕКУЩИЙ ШАГ):
-   - Создать Enums: `LotStatusEnum`, `CloseReasonEnum` в `Trade/Domain/Lot/Enum/`
-   - Создать Value Objects в `Trade/Domain/Lot/ValueObject/`:
-     - `Volume` (total, reserved, volumeStep) - с инвариантами
-     - `Price` (startPrice, priceStep)
-     - `LotTermination` (closesAt, closeReason)
-   - Создать `Lot` entity в `Trade/Domain/Lot/Entity/Lot.php`
-   - Создать `LotRepositoryInterface` в `Trade/Domain/Lot/Repository/`
+**Что нужно реализовать:**
+1. **Domain Layer:**
+   - Bid Entity (агрегат со ставкой)
+   - BidStatusEnum (ACTIVE, WINNER, LOSER)
+   - BidCollection для управления коллекцией ставок
+   - Strategy Pattern для распределения объёма
 
-2. **Application Layer**: Command/Handler/Result
-3. **UI Layer**: Request/Response/Action
-4. **Infra Layer**: LotRepository implementation
-5. **Migration**: Сгенерировать миграцию (code-first подход)
-6. **Validation**: doctrine:schema:validate
+2. **Application Layer:**
+   - PlaceBid/Command.php
+   - PlaceBid/Handler.php (с пессимистическими блокировками)
+   - PlaceBid/Result.php
 
-**Архитектурные требования:**
-- CQRS: Command/Handler/Result
-- Domain-first подход
-- Value Objects для Volume, Price, LotTermination
-- Unix timestamp (int) для дат в Request DTO
-- Handler возвращает Result (Application DTO), а не доменную сущность
-- LotRepository должен наследоваться от ServiceEntityRepository
+3. **UI Layer:**
+   - PlaceBid/Request.php
+   - PlaceBid/Response.php
+   - PlaceBid/Action.php
 
-**Референсный код:**
-- Пример структуры: `src/SomeModule/UI/Http/V1/Category/Create/`
-- Пример Entity: `src/SomeModule/Domain/Post/Entity/Category.php`
+4. **Infra Layer:**
+   - BidRepository (с SELECT ... FOR UPDATE)
 
-**Важно:**
-- Использовать CoreKit\Domain\Entity\Id для UUID
-- camelCase для PHP properties, snake_case для БД
-- Первичная валидация в Request DTO, вторичная в конструкторе Lot
-- После реализации логики - ОСТАНОВИТЬСЯ для ревью
-- Тесты пишем только после успешного ревью
+5. **Tests:**
+   - Интеграционные тесты для всех сценариев размещения ставки
 
-См. детали в:
+**Особенности реализации:**
+- Пессимистические блокировки для конкурентного доступа
+- Алгоритм распределения объёма между ставками
+- Валидация бизнес-правил (лот открыт, достаточно свободного объёма)
+
+**См. детали в:**
 - extra/docs/Trade-Progress.md (этот файл)
-- extra/docs/Trade-Development-Plan.md (раздел Endpoint #1)
-- extra/docs/Trade.md (требования к лоту)
-- extra/docs/Auction-Algorithm-Implementation.md (тактический DDD)
+- extra/docs/Trade-Development-Plan.md (раздел Endpoint #2)
+- extra/docs/Trade.md (требования к ставкам)
+- extra/docs/Auction-Algorithm-Implementation.md (алгоритм аукциона, Strategy Pattern)
 ```
 
 ---
 
 **Дата создания:** 2026-04-26
-**Дата последнего обновления:** 2026-05-21 (реорганизация структуры)
+**Дата последнего обновления:** 2026-05-25 (завершен Endpoint #1 с тестами)
