@@ -31,6 +31,13 @@ services:
             - '../src/Trade/{Kernel.php,*Dto.php}'
             - '../src/Trade/{Entity,Enum,Event,ValueObject}'
 
+    Trade\Domain\Lot\Strategy\BidAllocationStrategyInterface:
+        class: Trade\Domain\Lot\Strategy\PriceBasedAllocationStrategy
+
+    Trade\Application\Listener\EventLoggerListener:
+        arguments:
+            $eventLogger: '@monolog.logger.event_bus'
+
     SomeModule\:
         resource: '../src/SomeModule'
         exclude:

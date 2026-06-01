@@ -2,8 +2,8 @@
 
 ## 📍 Текущий статус разработки
 
-**Дата последнего обновления:** 2026-05-25
-**Текущий этап:** Endpoint #1 (POST /api/v1/trade/lot) - полностью завершен (реализация + тесты). Готов к Endpoint #2
+**Дата последнего обновления:** 2026-06-01
+**Текущий этап:** Console Command #1 (trade:open-lots) - ПОЛНОСТЬЮ ЗАВЕРШЕН (реализация + рефакторинг + тесты)
 
 ---
 
@@ -179,23 +179,280 @@
 
 ---
 
-## ⏳ Что нужно реализовать дальше (ТЕКУЩАЯ ЗАДАЧА)
+## ✅ Endpoint #2: POST /api/v1/trade/bid (ПОЛНОСТЬЮ ЗАВЕРШЕН)
 
-### Endpoint #2: POST /api/v1/trade/bid (Размещение ставки)
+**Статус:** ✅ **ЗАВЕРШЕН: РЕАЛИЗАЦИЯ + ТЕСТИРОВАНИЕ (2026-05-27)**
 
-**Статус:** ❌ НЕ НАЧАТО - следующий этап разработки
+**Что реализовано:**
 
-**Описание:**
-Самый сложный endpoint модуля Trade. Требует реализации:
-- Bid entity с валидацией
-- Strategy Pattern для распределения объёма
-- BidCollection для управления коллекцией ставок
-- Пессимистические блокировки (SELECT ... FOR UPDATE)
-- Конкурентное распределение объёма между ставками
+### 1. Domain Layer ✅
 
-**См. детали в:**
-- `extra/docs/Trade-Development-Plan.md` (раздел Endpoint #2)
-- `extra/docs/Auction-Algorithm-Implementation.md` (тактический DDD подход)
+- ✅ **Enums** (`src/Trade/Domain/Lot/Enum/`):
+  - `BidStatusEnum` (PENDING, ACTIVE, PARTIALLY_ACTIVE, OUTBID, REJECTED)
+
+- ✅ **Entity** (`src/Trade/Domain/Lot/Entity/Bid.php`):
+  - Aggregate с самомодификацией через методы:
+    - `createPending()` - фабричный метод создания ставки
+    - `allocate(int)` - выделить объём ставке
+    - `displace(int)` - вытеснить ставку (полностью или частично)
+    - `reject(string)` - отклонить ставку
+  - Foreign keys на Lot (CASCADE DELETE) и Contractor
+  - Индексы: `idx_bid_lot_id`, `idx_bid_contractor_id`, `idx_bid_lot_price_allocated`
+  - Getters: `getId()`, `getAllocatedVolume()`, `getPricePerTon()`, `hasAllocatedVolume()`, `isAccepted()`
+
+- ✅ **Collection** (`src/Trade/Domain/Lot/Collection/BidCollection.php`):
+  - Value Object для работы с коллекцией ставок
+  - Методы:
+    - `getWorseThan(int)` - получить ставки с ценой выше заданной (для вытеснения)
+    - `getTotalAllocatedVolume()` - суммарный выделенный объём
+    - `add(Bid)`, `toArray()`, `count()`
+  - Implements: `IteratorAggregate`, `Countable`
+
+- ✅ **Strategy Pattern** (`src/Trade/Domain/Lot/Strategy/`):
+  - `BidAllocationStrategyInterface` - интерфейс стратегии размещения
+  - `PriceBasedAllocationStrategy` - обратный аукцион (выигрывают дешевые):
+    - Алгоритм: сначала свободный объём, затем вытеснение худших ставок
+    - Приоритет вытеснения: дороже цена → раньше вытесняется
+    - При равной цене: LIFO (новые вытесняются первыми)
+  - `AllocationResult` - Result Object стратегии
+
+- ✅ **Result Object** (`src/Trade/Domain/Lot/Result/BidPlacementResult.php`):
+  - Результат размещения ставки с методами:
+    - `isSuccess()` - проверка успешности
+    - `getAllBidsToSave()` - все ставки для сохранения
+
+- ✅ **Lot Entity обновлен**:
+  - Добавлен метод `placeBid()` - центральная бизнес-операция размещения ставки
+  - Проверка инварианта: `reserved_volume <= total_volume`
+
+- ✅ **Volume Value Object обновлен**:
+  - Добавлен метод `setReservedVolume(int)` с валидацией
+
+- ✅ **Repository Interfaces**:
+  - `BidRepositoryInterface` - методы: `add()`, `get()`, `findActiveBidsForLotWithLock()`
+  - `LotRepositoryInterface` - добавлен метод `lockForUpdate()` для пессимистической блокировки
+
+### 2. Infra Layer ✅
+
+- ✅ **BidRepository** (`src/Trade/Infra/Lot/Repository/BidRepository.php`):
+  - Реализует BidRepositoryInterface
+  - `findActiveBidsForLotWithLock()` - SELECT ... FOR UPDATE для конкурентного доступа
+  - LockMode::PESSIMISTIC_WRITE
+
+- ✅ **LotRepository** обновлен:
+  - Добавлен метод `lockForUpdate()` с пессимистической блокировкой
+
+### 3. Application Layer ✅
+
+- ✅ **Command** (`src/Trade/Application/Bid/Command/PlaceBid/Command.php`):
+  - DTO с параметрами: lotId, contractorId, requestedVolume, pricePerTon
+
+- ✅ **Result** (`src/Trade/Application/Bid/Command/PlaceBid/Result.php`):
+  - Возвращаемый DTO: bidId, status, allocatedVolume, requestedVolume
+
+- ✅ **Handler** (`src/Trade/Application/Bid/Command/PlaceBid/Handler.php`):
+  - Реализует CommandHandlerInterface
+  - Использует пессимистические блокировки (lockForUpdate)
+  - Вызывает бизнес-операцию `$lot->placeBid()`
+  - Сохраняет новую ставку и вытесненные ставки
+
+### 4. UI Layer (HTTP API) ✅
+
+- ✅ **Request** (`src/Trade/UI/Http/V1/Bid/PlaceBid/Request.php`):
+  - Реализует RequestPayloadInterface
+  - Валидации: Uuid, Positive, NotBlank
+  - OpenAPI аннотации с примерами
+  - camelCase properties
+
+- ✅ **Response** (`src/Trade/UI/Http/V1/Bid/PlaceBid/Response.php`):
+  - Реализует ResponseInterface
+  - Структура: `{bidId, status, allocatedVolume, requestedVolume}`
+
+- ✅ **Action** (`src/Trade/UI/Http/V1/Bid/PlaceBid/Action.php`):
+  - Route: `POST /api/v1/trade/bid` (name: `trade_place-bid`)
+  - OpenAPI документация (tag: `Trade - Bids`)
+  - Читает `x-user-id` header для contractorId
+  - Маппинг Result → Response
+  - Обёртка ResponseWrapper
+
+### 5. Database Migration ✅
+
+- ✅ **Version20260525075629** (`migrations/Trade/2026/05/Version20260525075629.php`):
+  - Таблица `trade.bid` создана со всеми полями
+  - Поля: id, lot_id, contractor_id, requested_volume, allocated_volume, price_per_ton, status, rejection_reason, created_at, updated_at
+  - Foreign keys: lot_id → lot (CASCADE DELETE), contractor_id → contractor
+  - Индексы: `idx_bid_lot_id`, `idx_bid_contractor_id`, `idx_bid_lot_price_allocated`
+  - Миграция применена: `doctrine:schema:validate` - OK ✅
+
+### 6. Configuration ✅
+
+- ✅ **services.yaml** обновлен:
+  - Зарегистрирован алиас `BidAllocationStrategyInterface` → `PriceBasedAllocationStrategy`
+
+### 7. Integration Tests ✅
+
+**Директория:** `tests/Test/Integration/Trade/Api/PlaceBid/`
+
+**Фикстуры созданы:**
+- ✅ `BaseLotFixture.php` - базовый класс для создания лотов с помощью reflection (для установки статуса OPEN)
+- ✅ `LotFixture.php` - открытый лот (1000 тонн, статус OPEN)
+- ✅ `CargoTypeFixture.php`, `VolumeStepFixture.php`, `ContractorFixture.php` - локальные фикстуры
+
+**Тесты реализованы (7 успешных сценариев, 56 assertions):**
+1. ✅ `testSuccessPlaceBid` - базовое размещение ставки со свободным объемом
+2. ✅ `testSuccessPlaceBidWithPartialAllocation` - частичное выделение (allocated_volume < requested_volume)
+3. ✅ `testSuccessPlaceBidDisplacingWorseOnes` - вытеснение дорогих ставок (полное вытеснение + частичное)
+4. ✅ `testSuccessPlaceBidPartialDisplacement` - частичное вытеснение одной ставки
+5. ✅ `testSuccessPlaceBidWithSamePriceLIFO` - отклонение при одинаковой цене (LIFO правило)
+6. ✅ `testSuccessPlaceBidForEntireLotVolume` - резервирование всего объема лота (1000 тонн)
+7. ✅ `testSuccessMultipleBidsFromSameContractor` - несколько ставок от одного подрядчика
+
+**Результат:** ✅ Все тесты проходят успешно (Tests: 7, Assertions: 56)
+
+**Bug fixes в процессе тестирования:**
+- ✅ `BidRepository.php:47` - исправлен вызов setLockMode() на Query вместо QueryBuilder
+- ✅ `PriceBasedAllocationStrategy.php:50` - исправлен расчет totalReservedVolume (убрана двойная субтракция)
+
+---
+
+## ✅ Console Command #1: trade:open-lots (ПОЛНОСТЬЮ ЗАВЕРШЕН)
+
+**Статус:** ✅ **ЗАВЕРШЕН: РЕАЛИЗАЦИЯ + РЕФАКТОРИНГ + ТЕСТИРОВАНИЕ (2026-06-01)**
+
+**Назначение:** Автоматически открывать лоты по расписанию (CREATED → OPEN)
+
+**Что реализовано:**
+
+### 1. Domain Layer ✅
+
+- ✅ **DomainEventInterface** (`src/Trade/Domain/Event/DomainEventInterface.php`):
+  - Маркерный интерфейс для всех доменных событий (для Symfony Messenger)
+
+- ✅ **LotOpenedEvent** (`src/Trade/Domain/Event/LotOpenedEvent.php`):
+  - Доменное событие с полями: lotId, openedAt
+  - Реализует DomainEventInterface
+
+- ✅ **Lot::open()** (`src/Trade/Domain/Lot/Entity/Lot.php:108`):
+  - Бизнес-метод открытия лота
+  - Валидация: статус должен быть CREATED, opensAt должно наступить
+  - Переводит статус в OPEN
+
+- ✅ **LotRepositoryInterface::findLotsToOpen()** (`src/Trade/Domain/Lot/Repository/LotRepositoryInterface.php`):
+  - Метод поиска лотов для открытия
+
+### 2. Infra Layer ✅
+
+- ✅ **LotRepository::findLotsToOpen()** (`src/Trade/Infra/Lot/Repository/LotRepository.php:53`):
+  - DQL запрос: WHERE status = CREATED AND opensAt <= :now
+  - Возвращает массив лотов для открытия
+
+### 3. Application Layer ✅
+
+- ✅ **Open\Command** (`src/Trade/Application/Lot/Command/Open/Command.php`):
+  - CQRS команда с параметром lotId для открытия одного лота
+
+- ✅ **Open\Handler** (`src/Trade/Application/Lot/Command/Open/Handler.php`):
+  - Вызывает `$lot->open()`
+  - Публикует `LotOpenedEvent` в event.bus
+
+- ✅ **OpenDueLots\Command** (`src/Trade/Application/Lot/Command/OpenDueLots/Command.php`):
+  - CQRS команда с параметром `now: DateTimeImmutable`
+  - Используется для массового открытия лотов по расписанию
+
+- ✅ **OpenDueLots\Handler** (`src/Trade/Application/Lot/Command/OpenDueLots/Handler.php`):
+  - Находит лоты через `findLotsToOpen()`
+  - Для каждого лота диспатчит `Open\Command`
+  - Обрабатывает ошибки с логированием
+  - Возвращает `Result` со статистикой (totalProcessed, successfullyOpened, failed)
+
+- ✅ **OpenDueLots\Result** (`src/Trade/Application/Lot/Command/OpenDueLots/Result.php`):
+  - DTO для возврата статистики выполнения
+
+- ✅ **EventLoggerListener** (`src/Trade/Application/Listener/EventLoggerListener.php`):
+  - Универсальный слушатель для всех доменных событий
+  - **Использует Symfony Serializer** для сериализации событий (вместо Reflection)
+  - Логирует в `var/log/events.log` в JSON формате
+
+### 4. UI Layer (Console) ✅
+
+- ✅ **OpenLotsCommand** (`src/Trade/UI/Console/OpenLotsCommand.php`):
+  - Консольная команда `trade:open-lots`
+  - **Рефакторинг**: убрана прямая зависимость от `LotRepositoryInterface`
+  - Диспатчит `OpenDueLots\Command` через CommandBus
+  - Получает `Result` и выводит статистику
+  - Exit code: 0 (success), 1 (failures)
+
+### 5. Configuration ✅
+
+- ✅ **monolog.yaml**:
+  - Создан канал `event_bus`
+  - Настроен handler `event_log` → `var/log/events.log` (JSON формат)
+  - Канал `event_bus` исключен из основных логов (app, console)
+
+- ✅ **services.yaml**:
+  - Зарегистрирован `EventLoggerListener` с логгером `@monolog.logger.event_bus`
+  - Автоматический тег `messenger.message_handler` для event.bus через `_instanceof`
+
+- ✅ **messenger.yaml** (when@test):
+  - Добавлен транспорт `event.bus: 'test://'` для тестирования
+  - Настроен routing доменных событий в транспорт
+
+### 6. Integration Tests ✅
+
+**Директория:** `tests/Test/Integration/Trade/Console/OpenLots/`
+
+**Фикстуры созданы:**
+- ✅ `CargoTypeFixture.php` - тип груза
+- ✅ `VolumeStepFixture.php` - шаг объёма (25 тонн)
+- ✅ `LotFixture.php` - 3 лота (2 готовых к открытию, 1 с будущим opensAt)
+
+**Тесты реализованы (5 сценариев, 29 assertions):**
+1. ✅ `testSuccessOpenMultipleLots` - успешное открытие 2 лотов + проверка событий через transport
+2. ✅ `testNoLotsToOpen` - нет лотов для открытия
+3. ✅ `testOnlyLotsWithPassedOpensAtAreOpened` - открываются только лоты с наступившим opensAt
+4. ✅ `testAlreadyOpenedLotsAreSkipped` - уже открытые лоты пропускаются
+5. ✅ `testEventDataContainsCorrectInformation` - проверка данных в событиях (lotId, openedAt)
+
+**Результат:** ✅ Все тесты проходят успешно (Tests: 5, Assertions: 29)
+
+### 7. Bug Fixes & Improvements ✅
+
+- ✅ Исправлен PlaceBid/Request.php - убрана дублирующая схема `#[OA\Schema]`
+- ✅ Исправлен PlaceBid/Response.php - аннотации перемещены на свойства
+- ✅ Обновлен PlaceBid/Action.php - описание requestBody и response inline
+- ✅ OpenAPI документация работает корректно (http://localhost:8088/api/doc)
+
+**Команда зарегистрирована:** ✅ `php bin/console trade:open-lots`
+
+### 8. Архитектурные улучшения (Рефакторинг 2026-06-01) ✅
+
+**Проблемы до рефакторинга:**
+- ❌ UI слой (OpenLotsCommand) напрямую зависел от Repository
+- ❌ Нарушение слоистой архитектуры (UI → Repository минуя Application)
+- ❌ EventLoggerListener использовал кастомную сериализацию через Reflection
+- ❌ Отсутствовала возможность тестирования событий
+
+**Решение:**
+- ✅ **Создан OpenDueLots\Command + Handler в Application слое**
+  - Логика поиска лотов инкапсулирована в Handler
+  - UI слой только диспатчит команду через CommandBus
+  - Handler возвращает Result со статистикой выполнения
+
+- ✅ **Использование Symfony Serializer в EventLoggerListener**
+  - Удалены методы `serializeEvent()` и `serializeValue()`
+  - Использование `$serializer->normalize($event)` - стандартное решение
+  - Код стал чище и проще в поддержке
+
+- ✅ **Конфигурация Messenger для тестов**
+  - Добавлен транспорт `event.bus: 'test://'` в when@test
+  - Routing доменных событий в транспорт для проверки в тестах
+  - Возможность проверки количества и содержимого событий
+
+**Результат:**
+- ✅ Соблюдение принципов Clean Architecture
+- ✅ UI → Application → Domain ← Infra (правильный поток зависимостей)
+- ✅ Покрытие тестами: 24 теста, 130 assertions для всего модуля Trade
+- ✅ Код соответствует архитектурным стандартам проекта (CLAUDE.md)
 
 ---
 
@@ -227,20 +484,29 @@ vendor/bin/ecs check src/Trade
 ## 🎯 Следующие этапы:
 
 1. **Endpoint #1:** POST /api/v1/trade/lot - ✅ **ЗАВЕРШЕН (2026-05-25)**
-   - ✅ Логика реализована и ревью пройдено
-   - ✅ Фикстуры созданы (CargoType, VolumeStep, Contractor)
-   - ✅ Интеграционные тесты написаны (12 тестов, 45 assertions)
-   - ✅ Все тесты проходят успешно
-   - ✅ Bug fixes: Handler.php, routes.yaml
+   - ✅ Реализация + интеграционные тесты (12 тестов, 45 assertions)
 
-2. **Endpoint #2:** POST /api/v1/trade/bid (Размещение ставки) - **СЛЕДУЮЩАЯ ЗАДАЧА**
-   - Самый сложный endpoint с конкурентным распределением объёма
-   - Требует реализации Bid entity, Strategy Pattern, BidCollection
-   - Пессимистические блокировки (SELECT ... FOR UPDATE)
+2. **Endpoint #2:** POST /api/v1/trade/bid - ✅ **ЗАВЕРШЕН (2026-05-27)**
+   - ✅ Реализация + интеграционные тесты (7 тестов, 56 assertions)
+   - ✅ Bug fixes: BidRepository.php, PriceBasedAllocationStrategy.php
 
-3. **Endpoint #3:** GET /api/v1/trade/lot/{id} (Получить лот)
+3. **Console Command #1:** trade:open-lots - ✅ **ЗАВЕРШЕН (2026-06-01)**
+   - ✅ Domain: Lot::open(), LotOpenedEvent, DomainEventInterface
+   - ✅ Application: Open Command/Handler, OpenDueLots Command/Handler/Result
+   - ✅ Infra: LotRepository::findLotsToOpen()
+   - ✅ UI: OpenLotsCommand (рефакторинг - убрана зависимость от Repository)
+   - ✅ EventLoggerListener - использует Symfony Serializer
+   - ✅ Configuration: Monolog event_bus channel, Messenger test transport
+   - ✅ Integration Tests: 5 тестов, 29 assertions
+   - ✅ OpenAPI fixes: PlaceBid Request/Response
 
-4. **Endpoint #4:** GET /api/v1/trade/lot (Список лотов)
+4. **Console Command #2:** trade:calculate-winners - ⏳ **СЛЕДУЮЩИЙ ЭТАП**
+   - Определение победителей торгов
+   - Закрытие лотов по истечению времени
+
+5. **Endpoint #3:** GET /api/v1/trade/lot/{id} (Получить лот)
+
+6. **Endpoint #4:** GET /api/v1/trade/lot (Список лотов)
 
 ---
 
@@ -274,63 +540,50 @@ vendor/bin/ecs check src/Trade
 
 ---
 
-## 💡 Prompt для возобновления работы:
+## 💡 Prompt для возобновления работы (после /clear):
 
 ```
 Мы разрабатываем модуль Trade (сервис торгов) на Symfony 7.4 с CQRS/DDD.
 
-**Текущий статус:**
-- ✅ Подготовительный этап завершен (справочники: CargoType, Contractor, VolumeStep)
-- ✅ Структура модуля Trade реорганизована (2026-05-21)
-- ✅ Endpoint #1: POST /api/v1/trade/lot - ПОЛНОСТЬЮ ЗАВЕРШЕН (2026-05-25):
-  - ✅ Domain Layer: Enums, Value Objects (Volume, Price, LotTermination), Lot Entity
-  - ✅ Application Layer: Command, Handler, Result
-  - ✅ UI Layer: Request, Response, Action
-  - ✅ Infra Layer: LotRepository
-  - ✅ Migration: Version20260521073725 (таблица trade.lot с индексами)
-  - ✅ Интеграционные тесты: 12 тестов, 45 assertions - все проходят
-  - ✅ Bug fixes: Handler.php, routes.yaml
-- ⏸️ **ОСТАНОВИЛИСЬ НА:** Endpoint #1 завершен, готовы к Endpoint #2
+**Текущий статус (2026-06-01):**
+- ✅ Endpoint #1 (POST /api/v1/trade/lot) - ЗАВЕРШЕН (реализация + 12 тестов)
+- ✅ Endpoint #2 (POST /api/v1/trade/bid) - ЗАВЕРШЕН (реализация + 7 тестов)
+- ✅ Console Command #1 (trade:open-lots) - ЗАВЕРШЕН (реализация + рефакторинг + 5 тестов)
+  - ✅ Domain: Lot::open(), LotOpenedEvent, DomainEventInterface, LotRepositoryInterface::findLotsToOpen()
+  - ✅ Infra: LotRepository::findLotsToOpen() - DQL запрос (status = CREATED AND opensAt <= now)
+  - ✅ Application: Open\Command, Open\Handler (публикует LotOpenedEvent)
+  - ✅ Application: OpenDueLots\Command, OpenDueLots\Handler, OpenDueLots\Result
+  - ✅ Application: EventLoggerListener - использует Symfony Serializer
+  - ✅ UI: OpenLotsCommand - рефакторинг (убрана зависимость от Repository)
+  - ✅ Configuration: Monolog event_bus канал, Messenger test transport
+  - ✅ Integration Tests: 5 тестов, 29 assertions
+  - ✅ OpenAPI fixes: PlaceBid Request/Response
 
-**Следующий шаг (ТЕКУЩАЯ ЗАДАЧА):**
-Начать разработку Endpoint #2: POST /api/v1/trade/bid (Размещение ставки)
+**⏳ СЛЕДУЮЩАЯ ЗАДАЧА: Console Command #2 (trade:calculate-winners)**
 
-**Что нужно реализовать:**
-1. **Domain Layer:**
-   - Bid Entity (агрегат со ставкой)
-   - BidStatusEnum (ACTIVE, WINNER, LOSER)
-   - BidCollection для управления коллекцией ставок
-   - Strategy Pattern для распределения объёма
+Определение победителей торгов и закрытие лотов по истечению времени.
 
-2. **Application Layer:**
-   - PlaceBid/Command.php
-   - PlaceBid/Handler.php (с пессимистическими блокировками)
-   - PlaceBid/Result.php
+**Что нужно сделать:**
+1. Реализовать команду `trade:calculate-winners` для закрытия лотов
+2. Определить победителей по алгоритму обратного аукциона
+3. Реализовать логику финализации ставок
+4. Написать интеграционные тесты
 
-3. **UI Layer:**
-   - PlaceBid/Request.php
-   - PlaceBid/Response.php
-   - PlaceBid/Action.php
+**Важные файлы:**
+- Команда: `src/Trade/UI/Console/OpenLotsCommand.php`
+- Handler: `src/Trade/Application/Lot/Command/OpenDueLots/Handler.php`
+- Domain метод: `src/Trade/Domain/Lot/Entity/Lot.php` (метод open())
+- Событие: `src/Trade/Domain/Event/LotOpenedEvent.php`
+- EventLoggerListener: `src/Trade/Application/Listener/EventLoggerListener.php`
+- Тесты: `tests/Test/Integration/Trade/Console/OpenLots/`
 
-4. **Infra Layer:**
-   - BidRepository (с SELECT ... FOR UPDATE)
-
-5. **Tests:**
-   - Интеграционные тесты для всех сценариев размещения ставки
-
-**Особенности реализации:**
-- Пессимистические блокировки для конкурентного доступа
-- Алгоритм распределения объёма между ставками
-- Валидация бизнес-правил (лот открыт, достаточно свободного объёма)
-
-**См. детали в:**
-- extra/docs/Trade-Progress.md (этот файл)
-- extra/docs/Trade-Development-Plan.md (раздел Endpoint #2)
-- extra/docs/Trade.md (требования к ставкам)
-- extra/docs/Auction-Algorithm-Implementation.md (алгоритм аукциона, Strategy Pattern)
+**Референсы:**
+- Документация: `extra/docs/Trade-Progress.md` (этот файл)
+- План разработки: `extra/docs/Trade-Development-Plan.md`
+- Требования: `extra/docs/Trade.md`
 ```
 
 ---
 
 **Дата создания:** 2026-04-26
-**Дата последнего обновления:** 2026-05-25 (завершен Endpoint #1 с тестами)
+**Дата последнего обновления:** 2026-06-01 (команда trade:open-lots полностью завершена: реализация + рефакторинг + тесты)

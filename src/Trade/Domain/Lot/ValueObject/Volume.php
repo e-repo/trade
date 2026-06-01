@@ -52,6 +52,19 @@ class Volume
         $this->reservedVolume += $amount;
     }
 
+    public function setReservedVolume(int $reservedVolume): void
+    {
+        if ($reservedVolume < 0) {
+            throw new DomainException('Reserved volume cannot be negative');
+        }
+
+        if ($reservedVolume > $this->totalVolume) {
+            throw new DomainException('Reserved volume cannot exceed total volume');
+        }
+
+        $this->reservedVolume = $reservedVolume;
+    }
+
     private function validateVolume(int $totalVolume, int $volumeStepValue): void
     {
         if ($totalVolume <= 0) {

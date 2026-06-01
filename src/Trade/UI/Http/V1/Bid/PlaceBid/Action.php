@@ -19,7 +19,14 @@ use Trade\Application\Bid\Command\PlaceBid\Command;
     summary: 'Place a bid on a lot',
     requestBody: new OA\RequestBody(
         required: true,
-        content: new OA\JsonContent(ref: '#/components/schemas/PlaceBidRequest')
+        content: new OA\JsonContent(
+            required: ['lotId', 'requestedVolume', 'pricePerTon'],
+            properties: [
+                new OA\Property(property: 'lotId', type: 'string', format: 'uuid', example: '550e8400-e29b-41d4-a716-446655440001'),
+                new OA\Property(property: 'requestedVolume', type: 'integer', example: 50, description: 'Requested volume in tons'),
+                new OA\Property(property: 'pricePerTon', type: 'integer', example: 150000, description: 'Price per ton in kopecks'),
+            ]
+        )
     ),
     tags: ['Trade - Bids'],
     parameters: [
@@ -38,7 +45,13 @@ use Trade\Application\Bid\Command\PlaceBid\Command;
                 properties: [
                     new OA\Property(
                         property: 'data',
-                        ref: '#/components/schemas/PlaceBidResponse'
+                        properties: [
+                            new OA\Property(property: 'bidId', type: 'string', format: 'uuid'),
+                            new OA\Property(property: 'status', type: 'string', example: 'ACTIVE'),
+                            new OA\Property(property: 'allocatedVolume', type: 'integer', example: 50, description: 'Allocated volume in tons'),
+                            new OA\Property(property: 'requestedVolume', type: 'integer', example: 50, description: 'Requested volume in tons'),
+                        ],
+                        type: 'object'
                     ),
                 ]
             )

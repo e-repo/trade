@@ -12,10 +12,10 @@ framework:
                 default_middleware:
                     allow_no_handlers: true
 
-# when@test:
-#    framework:
-#        messenger:
-#            transports:
-#                # replace with your transport name here (e.g., my_transport: 'in-memory://')
-#                # For more Messenger testing tools, see https://github.com/zenstruck/messenger-test
-#                async: 'in-memory://'
+when@test:
+    framework:
+        messenger:
+            transports:
+                event.bus: 'test://'
+            routing:
+                'Trade\Domain\Event\DomainEventInterface': event.bus

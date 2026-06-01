@@ -10,7 +10,10 @@ use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 use Trade\Domain\Dictionary\Entity\CargoType;
 use Trade\Domain\Dictionary\Entity\VolumeStep;
+use Trade\Domain\Lot\Collection\BidCollection;
 use Trade\Domain\Lot\Enum\LotStatusEnum;
+use Trade\Domain\Lot\Result\BidPlacementResult;
+use Trade\Domain\Lot\Strategy\BidAllocationStrategyInterface;
 use Trade\Domain\Lot\ValueObject\LotTermination;
 use Trade\Domain\Lot\ValueObject\Price;
 use Trade\Domain\Lot\ValueObject\Volume;
@@ -100,6 +103,46 @@ class Lot
     {
         return $this->status === LotStatusEnum::OPEN
             && new DateTimeImmutable() <= $this->termination->getClosesAt();
+    }
+
+    public function open(): void
+    {
+        if ($this->status !== LotStatusEnum::CREATED) {
+            throw new DomainException('Lot cannot be opened');
+        }
+
+        if (new DateTimeImmutable() < $this->opensAt) {
+            throw new DomainException('Lot opens_at time not reached');
+        }
+
+        $this->status = LotStatusEnum::OPEN;
+        $this->updatedAt = new DateTimeImmutable();
+    }
+
+    public function placeBid(
+        BidCollection $existingBids,
+        Bid $newBid,
+        BidAllocationStrategyInterface $strategy
+    ): BidPlacementResult {
+        if (!$this->canAcceptBids()) {
+            throw new DomainException('Lot is not open for bids');
+        }
+
+        $allocationResult = $strategy->allocate($this, $existingBids, $newBid);
+
+        $this->volume->setReservedVolume($allocationResult->newReservedVolume);
+
+        if ($this->volume->getReservedVolume() > $this->volume->getTotalVolume()) {
+            throw new DomainException('Reserved volume exceeds total volume');
+        }
+
+        $this->updatedAt = new DateTimeImmutable();
+
+        return new BidPlacementResult(
+            newBid: $newBid,
+            modifiedBids: $allocationResult->modifiedBids,
+            lotReservedVolume: $this->volume->getReservedVolume(),
+        );
     }
 
     private function validateDates(DateTimeImmutable $opensAt, DateTimeImmutable $closesAt): void
