@@ -10,16 +10,16 @@ use OpenApi\Attributes as OA;
 final readonly class Response implements ResponseInterface
 {
     public function __construct(
-        #[OA\Property(type: 'string', format: 'uuid')]
+        #[OA\Property(description: 'Идентификатор ставки', type: 'string', format: 'uuid')]
         public string $bidId,
 
-        #[OA\Property(type: 'string', example: 'ACTIVE')]
+        #[OA\Property(description: 'Статус ставки', type: 'string', example: 'ACTIVE')]
         public string $status,
 
-        #[OA\Property(type: 'integer', example: 50, description: 'Allocated volume in tons')]
+        #[OA\Property(description: 'Выделенный объем в тоннах', type: 'integer', example: 50)]
         public int $allocatedVolume,
 
-        #[OA\Property(type: 'integer', example: 50, description: 'Requested volume in tons')]
+        #[OA\Property(description: 'Запрашиваемый объем в тоннах', type: 'integer', example: 50)]
         public int $requestedVolume,
     ) {}
 }

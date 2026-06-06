@@ -11,19 +11,19 @@ use Symfony\Component\Validator\Constraints as Assert;
 final readonly class Request implements RequestPayloadInterface
 {
     public function __construct(
-        #[Assert\NotBlank]
-        #[Assert\Uuid]
-        #[OA\Property(example: '550e8400-e29b-41d4-a716-446655440001')]
+        #[Assert\NotBlank(message: 'Идентификатор лота обязателен')]
+        #[Assert\Uuid(message: 'Идентификатор лота должен быть валидным UUID')]
+        #[OA\Property(description: 'Идентификатор лота', example: '550e8400-e29b-41d4-a716-446655440001')]
         public string $lotId,
 
-        #[Assert\NotBlank]
-        #[Assert\Positive]
-        #[OA\Property(example: 50, description: 'Requested volume in tons')]
+        #[Assert\NotBlank(message: 'Запрашиваемый объем обязателен')]
+        #[Assert\Positive(message: 'Запрашиваемый объем должен быть положительным числом')]
+        #[OA\Property(description: 'Запрашиваемый объем в тоннах', example: 50)]
         public int $requestedVolume,
 
-        #[Assert\NotBlank]
-        #[Assert\Positive]
-        #[OA\Property(example: 150000, description: 'Price per ton in kopecks')]
+        #[Assert\NotBlank(message: 'Цена за тонну обязательна')]
+        #[Assert\Positive(message: 'Цена за тонну должна быть положительным числом')]
+        #[OA\Property(description: 'Цена за тонну в копейках', example: 150000)]
         public int $pricePerTon,
     ) {}
 }

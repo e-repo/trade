@@ -16,16 +16,16 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;
 use Trade\Application\Lot\Command\Create\Command;
 
-#[OA\Tag(name: 'Trade - Lots')]
+#[OA\Tag(name: 'Trade - Лоты')]
 #[OA\Post(
-    summary: 'Create lot',
+    summary: 'Создать лот',
     requestBody: new OA\RequestBody(
         content: new OA\JsonContent(ref: new Model(type: Request::class))
     ),
     responses: [
         new OA\Response(
             response: 200,
-            description: 'Lot created successfully',
+            description: 'Лот успешно создан',
             content: new OA\JsonContent(
                 ref: new Model(type: ResponseWrapper::class),
                 example: new ResponseWrapper(
@@ -38,13 +38,13 @@ use Trade\Application\Lot\Command\Create\Command;
         ),
         new OA\Response(
             response: 400,
-            description: 'Invalid request data',
-            content: new Model(type: Violation::class),
+            description: 'Некорректные данные запроса',
+            content: new Model(type: Violation::class)
         ),
         new OA\Response(
             response: 422,
-            description: 'Business logic error',
-            content: new Model(type: Violation::class),
+            description: 'Нарушение бизнес-правил',
+            content: new Model(type: Violation::class)
         ),
     ]
 )]
