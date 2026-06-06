@@ -20,4 +20,14 @@ interface LotRepositoryInterface
      * @return array<Lot>
      */
     public function findLotsToOpen(DateTimeImmutable $now): array;
+
+    /**
+     * Итератор для батчевой обработки лотов, подлежащих закрытию.
+     * Каждая итерация возвращает DTO с лотом и его выделенными ставками.
+     *
+     * @param DateTimeImmutable $now
+     * @param int $batchSize
+     * @return \Generator<LotWithAllocatedBidsDto>
+     */
+    public function findLotsToCloseIterator(DateTimeImmutable $now, int $batchSize = 100): \Generator;
 }

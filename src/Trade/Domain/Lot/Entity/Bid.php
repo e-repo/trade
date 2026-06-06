@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Trade\Domain\Lot\Entity;
 
+use Carbon\Carbon;
 use CoreKit\Domain\Entity\Id;
 use DateTimeImmutable;
 use Doctrine\ORM\Mapping as ORM;
@@ -22,7 +23,7 @@ class Bid
     #[ORM\Column(type: 'uuid')]
     private Id $id;
 
-    #[ORM\ManyToOne(targetEntity: Lot::class)]
+    #[ORM\ManyToOne(targetEntity: Lot::class, inversedBy: 'bids')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     private Lot $lot;
 
@@ -68,7 +69,7 @@ class Bid
         $bid->pricePerTon = $pricePerTon;
         $bid->status = BidStatusEnum::PENDING;
         $bid->allocatedVolume = 0;
-        $bid->createdAt = new DateTimeImmutable();
+        $bid->createdAt = Carbon::now()->toDateTimeImmutable();
 
         return $bid;
     }
@@ -86,7 +87,7 @@ class Bid
             $this->status = BidStatusEnum::PARTIALLY_ACTIVE;
         }
 
-        $this->updatedAt = new DateTimeImmutable();
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
     }
 
     /**
@@ -101,14 +102,14 @@ class Bid
             $displaced = $this->allocatedVolume;
             $this->allocatedVolume = 0;
             $this->status = BidStatusEnum::OUTBID;
-            $this->updatedAt = new DateTimeImmutable();
+            $this->updatedAt = Carbon::now()->toDateTimeImmutable();
             return $displaced;
         }
 
         // Частичное вытеснение
         $this->allocatedVolume -= $volume;
         $this->status = BidStatusEnum::PARTIALLY_ACTIVE;
-        $this->updatedAt = new DateTimeImmutable();
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
         return $volume;
     }
 
@@ -120,7 +121,7 @@ class Bid
         $this->allocatedVolume = 0;
         $this->status = BidStatusEnum::REJECTED;
         $this->rejectionReason = $reason;
-        $this->updatedAt = new DateTimeImmutable();
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
     }
 
     // Getters

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Trade\UI\Http\V1\Lot\Create;
 
+use Carbon\Carbon;
 use CoreKit\Application\Bus\CommandBusInterface;
 use CoreKit\UI\Http\Response\ResponseWrapper;
 use CoreKit\UI\Http\Response\Violation;
@@ -67,8 +68,8 @@ final class Action extends AbstractController
                 startPrice: $request->startPrice,
                 priceStep: $request->priceStep,
                 volumeStepId: $request->volumeStepId,
-                opensAt: new DateTimeImmutable()->setTimestamp($request->opensAt),
-                closesAt: new DateTimeImmutable()->setTimestamp($request->closesAt),
+                opensAt: Carbon::createFromTimestamp($request->opensAt)->toDateTimeImmutable(),
+                closesAt: Carbon::createFromTimestamp($request->closesAt)->toDateTimeImmutable(),
             )
         );
 

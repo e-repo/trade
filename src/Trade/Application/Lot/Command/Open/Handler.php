@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Trade\Application\Lot\Command\Open;
 
+use Carbon\Carbon;
 use CoreKit\Application\Bus\CommandHandlerInterface;
 use CoreKit\Application\Bus\EventBusInterface;
 use CoreKit\Domain\Entity\Id;
@@ -27,7 +28,7 @@ final readonly class Handler implements CommandHandlerInterface
         $this->eventBus->publish(
             new LotOpenedEvent(
                 lotId: $lot->getId(),
-                openedAt: new DateTimeImmutable(),
+                openedAt: Carbon::now()->toDateTimeImmutable(),
             )
         );
     }

@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Trade\Domain\Lot\Entity;
 
+use Carbon\Carbon;
 use CoreKit\Domain\Entity\Id;
 use DateTimeImmutable;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use DomainException;
 use Trade\Domain\Dictionary\Entity\CargoType;
 use Trade\Domain\Dictionary\Entity\VolumeStep;
 use Trade\Domain\Lot\Collection\BidCollection;
+use Trade\Domain\Lot\Enum\CloseReasonEnum;
 use Trade\Domain\Lot\Enum\LotStatusEnum;
 use Trade\Domain\Lot\Result\BidPlacementResult;
 use Trade\Domain\Lot\Strategy\BidAllocationStrategyInterface;
@@ -62,6 +66,12 @@ class Lot
     #[ORM\Column(nullable: true)]
     private ?DateTimeImmutable $updatedAt = null;
 
+    /**
+     * @var Collection<int, Bid>
+     */
+    #[ORM\OneToMany(targetEntity: Bid::class, mappedBy: 'lot')]
+    private Collection $bids;
+
     public function __construct(
         CargoType $cargoType,
         int $totalVolume,
@@ -71,15 +81,17 @@ class Lot
         DateTimeImmutable $opensAt,
         DateTimeImmutable $closesAt,
     ) {
+
         $this->id = Id::next();
         $this->cargoType = $cargoType;
         $this->volumeStep = $volumeStep;
         $this->volume = new Volume($totalVolume, $volumeStep->getValue());
         $this->price = new Price($startPrice, $priceStep);
+        $this->bids = new ArrayCollection();
         $this->opensAt = $opensAt;
         $this->termination = new LotTermination($closesAt);
         $this->status = LotStatusEnum::CREATED;
-        $this->createdAt = new DateTimeImmutable();
+        $this->createdAt = Carbon::now()->toDateTimeImmutable();
 
         $this->validateDates($opensAt, $closesAt);
     }
@@ -102,7 +114,7 @@ class Lot
     public function canAcceptBids(): bool
     {
         return $this->status === LotStatusEnum::OPEN
-            && new DateTimeImmutable() <= $this->termination->getClosesAt();
+            && Carbon::now() <= $this->termination->getClosesAt();
     }
 
     public function open(): void
@@ -111,12 +123,23 @@ class Lot
             throw new DomainException('Lot cannot be opened');
         }
 
-        if (new DateTimeImmutable() < $this->opensAt) {
+        if (Carbon::now() < $this->opensAt) {
             throw new DomainException('Lot opens_at time not reached');
         }
 
         $this->status = LotStatusEnum::OPEN;
-        $this->updatedAt = new DateTimeImmutable();
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
+    }
+
+    public function close(CloseReasonEnum $reason): void
+    {
+        if ($this->status !== LotStatusEnum::OPEN) {
+            throw new DomainException('Lot cannot be closed');
+        }
+
+        $this->status = LotStatusEnum::CLOSED;
+        $this->termination->close($reason);
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
     }
 
     public function placeBid(
@@ -136,7 +159,7 @@ class Lot
             throw new DomainException('Reserved volume exceeds total volume');
         }
 
-        $this->updatedAt = new DateTimeImmutable();
+        $this->updatedAt = Carbon::now()->toDateTimeImmutable();
 
         return new BidPlacementResult(
             newBid: $newBid,
@@ -145,13 +168,21 @@ class Lot
         );
     }
 
+    /**
+     * @return Collection<int, Bid>
+     */
+    public function getBids(): Collection
+    {
+        return $this->bids;
+    }
+
     private function validateDates(DateTimeImmutable $opensAt, DateTimeImmutable $closesAt): void
     {
         if ($opensAt >= $closesAt) {
             throw new DomainException('Opens at must be before closes at');
         }
 
-        $now = new DateTimeImmutable();
+        $now = Carbon::now();
         if ($closesAt <= $now) {
             throw new DomainException('Closes at must be in the future');
         }

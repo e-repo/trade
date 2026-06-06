@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Trade\Application\Listener;
 
+use Carbon\Carbon;
 use CoreKit\Application\Bus\EventListenerInterface;
 use DateTimeImmutable;
 use Psr\Log\LoggerInterface;
@@ -22,7 +23,7 @@ final readonly class EventLoggerListener implements EventListenerInterface
         $this->eventLogger->info('Domain event occurred', [
             'event_type' => $event::class,
             'event_data' => $this->serializer->normalize($event),
-            'occurred_at' => (new DateTimeImmutable())->format(DateTimeImmutable::ATOM),
+            'occurred_at' => Carbon::now()->format(DateTimeImmutable::ATOM),
         ]);
     }
 }
