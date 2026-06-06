@@ -83,7 +83,12 @@ class Bid
 
         if ($volume === $this->requestedVolume) {
             $this->status = BidStatusEnum::ACTIVE;
-        } elseif ($volume > 0) {
+            $this->updatedAt = Carbon::now()->toDateTimeImmutable();
+
+            return;
+        }
+
+        if ($volume > 0) {
             $this->status = BidStatusEnum::PARTIALLY_ACTIVE;
         }
 

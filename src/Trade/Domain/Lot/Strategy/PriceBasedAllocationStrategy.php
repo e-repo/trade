@@ -41,10 +41,12 @@ final class PriceBasedAllocationStrategy implements BidAllocationStrategyInterfa
 
         $allocatedVolume = $newBid->getRequestedVolume() - $remaining;
 
+        if ($allocatedVolume <= 0) {
+            $newBid->reject('Insufficient free volume and no worse bids to displace');
+        }
+
         if ($allocatedVolume > 0) {
             $newBid->allocate($allocatedVolume);
-        } else {
-            $newBid->reject('Insufficient free volume and no worse bids to displace');
         }
 
         $totalReserved = $existingBids->getTotalAllocatedVolume() + $newBid->getAllocatedVolume();
