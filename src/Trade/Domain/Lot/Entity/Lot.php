@@ -80,9 +80,10 @@ class Lot
         VolumeStep $volumeStep,
         DateTimeImmutable $opensAt,
         DateTimeImmutable $closesAt,
+        ?Id $id = null,
     ) {
 
-        $this->id = Id::next();
+        $this->id = $id ?? Id::next();
         $this->cargoType = $cargoType;
         $this->volumeStep = $volumeStep;
         $this->volume = new Volume($totalVolume, $volumeStep->getValue());

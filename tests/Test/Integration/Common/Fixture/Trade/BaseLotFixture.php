@@ -9,7 +9,6 @@ use DateTimeImmutable;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
 use Doctrine\Persistence\ObjectManager;
-use ReflectionClass;
 use Test\Integration\Common\Fixture\BaseFixtureTrait;
 use Test\Integration\Common\Fixture\ReferencableInterface;
 use Trade\Domain\Dictionary\Entity\CargoType;
@@ -37,14 +36,11 @@ class BaseLotFixture extends Fixture implements ReferencableInterface, Dependent
                 volumeStep: $volumeStep,
                 opensAt: $item['opensAt'],
                 closesAt: $item['closesAt'],
+                id: isset($item['id']) ? new Id($item['id']) : null,
             );
 
             if (isset($item['status']) && $item['status'] === LotStatusEnum::OPEN->value) {
-                $this->setLotStatus($lot, LotStatusEnum::OPEN);
-            }
-
-            if (isset($item['id'])) {
-                $this->setLotId($lot, new Id($item['id']));
+                $lot->open();
             }
 
             $manager->persist($lot);
@@ -66,21 +62,5 @@ class BaseLotFixture extends Fixture implements ReferencableInterface, Dependent
     public static function getPrefix(): string
     {
         return 'trade-lot';
-    }
-
-    private function setLotStatus(Lot $lot, LotStatusEnum $status): void
-    {
-        $reflection = new ReflectionClass($lot);
-        $property = $reflection->getProperty('status');
-        $property->setAccessible(true);
-        $property->setValue($lot, $status);
-    }
-
-    private function setLotId(Lot $lot, Id $id): void
-    {
-        $reflection = new ReflectionClass($lot);
-        $property = $reflection->getProperty('id');
-        $property->setAccessible(true);
-        $property->setValue($lot, $id);
     }
 }
