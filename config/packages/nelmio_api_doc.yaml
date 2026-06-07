@@ -6,9 +6,11 @@ nelmio_api_doc:
             version: 1.0.0
         components:
             securitySchemes:
-                Bearer:
-                    type: http
-                    scheme: bearer
+                UserIdHeader:
+                    type: apiKey
+                    in: header
+                    name: x-user-id
+                    description: 'UUID пользователя от имени которого выполняется запрос'
             parameters:
                 offsetParam:
                     name: 'offset'
@@ -30,7 +32,7 @@ nelmio_api_doc:
                         maximum: 100
                         default: 100
         security:
-            -   Bearer: [ ]
+            -   UserIdHeader: [ ]
 
         paths:
             /api/doc.json:
