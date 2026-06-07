@@ -35,6 +35,30 @@ final class ContractorFixture extends BaseContractorFixture
                 'patronymic' => 'Сергеевич',
                 'agreementId' => '550e8400-e29b-41d4-a716-446655440102',
             ],
+            [
+                'id' => '550e8400-e29b-41d4-a716-446655440023',
+                'email' => 'contractor4@example.com',
+                'firstName' => 'Алексей',
+                'secondName' => 'Алексеев',
+                'patronymic' => 'Алексеевич',
+                'agreementId' => '550e8400-e29b-41d4-a716-446655440103',
+            ],
+            [
+                'id' => '550e8400-e29b-41d4-a716-446655440024',
+                'email' => 'contractor5@example.com',
+                'firstName' => 'Дмитрий',
+                'secondName' => 'Дмитриев',
+                'patronymic' => 'Дмитриевич',
+                'agreementId' => '550e8400-e29b-41d4-a716-446655440104',
+            ],
+            [
+                'id' => '550e8400-e29b-41d4-a716-446655440025',
+                'email' => 'contractor6@example.com',
+                'firstName' => 'Михаил',
+                'secondName' => 'Михайлов',
+                'patronymic' => 'Михайлович',
+                'agreementId' => '550e8400-e29b-41d4-a716-446655440105',
+            ],
         ];
     }
 }

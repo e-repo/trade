@@ -33,7 +33,7 @@ final readonly class Handler implements CommandHandlerInterface
             $totalProcessed++;
 
             try {
-                $lot = $this->lotRepository->lockForUpdate($lotData->lotId);
+                $lot = $lotData->lot;
 
                 $lot->close(CloseReasonEnum::EXPIRED);
 
@@ -69,7 +69,7 @@ final readonly class Handler implements CommandHandlerInterface
             } catch (Throwable $throwable) {
                 $failed++;
                 $this->logger->error('Failed to close lot', [
-                    'lot_id' => $lotData->lotId->value,
+                    'lot_id' => $lot->getId()->value,
                     'error' => $throwable->getMessage(),
                     'trace' => $throwable->getTraceAsString(),
                 ]);

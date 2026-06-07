@@ -72,24 +72,19 @@ final class LotRepository implements LotRepositoryInterface
         $offset = 0;
 
         while (true) {
-            // Оптимизированный SQL: только нужные поля
-            $sql = <<<SQL
-                SELECT
-                    l.id as lot_id,
-                    b.id as bid_id,
-                    b.contractor_id,
-                    b.allocated_volume,
-                    b.price_per_ton
+            // Шаг 1: Получаем ID лотов для закрытия с блокировкой
+            $lotIdsSql = <<<SQL
+                SELECT l.id
                 FROM trade.lot l
-                LEFT JOIN trade.bid b ON b.lot_id = l.id AND b.allocated_volume > 0
                 WHERE l.status = :status
                   AND l.termination_closes_at <= :now
-                ORDER BY l.id, b.price_per_ton ASC, b.created_at ASC
+                ORDER BY l.id
                 LIMIT :limit OFFSET :offset
+                FOR UPDATE
             SQL;
 
             $stmt = $connection->executeQuery(
-                $sql,
+                $lotIdsSql,
                 [
                     'status' => LotStatusEnum::OPEN->value,
                     'now' => $now->format('Y-m-d H:i:s'),
@@ -98,39 +93,71 @@ final class LotRepository implements LotRepositoryInterface
                 ]
             );
 
-            $results = $stmt->fetchAllAssociative();
+            $lotIds = array_column($stmt->fetchAllAssociative(), 'id');
 
-            if (empty($results)) {
+            if (empty($lotIds)) {
                 break;
             }
 
-            // Группируем результаты по лотам
-            $lotsData = [];
-            foreach ($results as $row) {
-                $lotId = $row['lot_id'];
+            // Шаг 2: Загружаем заблокированные Lot entity через Doctrine
+            $lotQueryBuilder = $this->em->createQueryBuilder();
+            $lots = $lotQueryBuilder->select('l')
+                ->from(Lot::class, 'l')
+                ->where($lotQueryBuilder->expr()->in('l.id', ':ids'))
+                ->setParameter('ids', $lotIds)
+                ->getQuery()
+                ->getResult();
 
-                if (!isset($lotsData[$lotId])) {
-                    $lotsData[$lotId] = [
-                        'lotId' => new Id($lotId),
-                        'bids' => [],
-                    ];
-                }
-
-                // Если есть ставка (LEFT JOIN может вернуть NULL)
-                if ($row['bid_id'] !== null) {
-                    $lotsData[$lotId]['bids'][] = new AllocatedBidDto(
-                        bidId: new Id($row['bid_id']),
-                        contractorId: new Id($row['contractor_id']),
-                        allocatedVolume: (int) $row['allocated_volume'],
-                        pricePerTon: (int) $row['price_per_ton'],
-                    );
-                }
+            // Создаём индекс лотов по ID для O(1) доступа
+            $lotsById = [];
+            foreach ($lots as $lot) {
+                $lotsById[$lot->getId()->value] = $lot;
             }
 
-            foreach ($lotsData as $data) {
+            // Шаг 3: Получаем allocated bids для этих лотов одним запросом
+            $bidsSql = <<<SQL
+                SELECT
+                    b.id as bid_id,
+                    b.lot_id,
+                    b.contractor_id,
+                    b.allocated_volume,
+                    b.price_per_ton
+                FROM trade.bid b
+                WHERE b.lot_id IN (:lot_ids)
+                  AND b.allocated_volume > 0
+                ORDER BY b.lot_id, b.price_per_ton ASC, b.created_at ASC
+            SQL;
+
+            $stmt = $connection->executeQuery(
+                $bidsSql,
+                ['lot_ids' => $lotIds],
+                ['lot_ids' => \Doctrine\DBAL\ArrayParameterType::STRING]
+            );
+
+            $bidsResults = $stmt->fetchAllAssociative();
+
+            // Группируем ставки по лотам
+            $bidsByLotId = [];
+            foreach ($bidsResults as $row) {
+                $lotId = $row['lot_id'];
+
+                if (!isset($bidsByLotId[$lotId])) {
+                    $bidsByLotId[$lotId] = [];
+                }
+
+                $bidsByLotId[$lotId][] = new AllocatedBidDto(
+                    bidId: new Id($row['bid_id']),
+                    contractorId: new Id($row['contractor_id']),
+                    allocatedVolume: (int) $row['allocated_volume'],
+                    pricePerTon: (int) $row['price_per_ton'],
+                );
+            }
+
+            // Шаг 4: Возвращаем DTO с заблокированными лотами и их ставками
+            foreach ($lotIds as $lotId) {
                 yield new LotWithAllocatedBidsDto(
-                    lotId: $data['lotId'],
-                    allocatedBids: $data['bids'],
+                    lot: $lotsById[$lotId],
+                    allocatedBids: $bidsByLotId[$lotId] ?? [],
                 );
             }
 

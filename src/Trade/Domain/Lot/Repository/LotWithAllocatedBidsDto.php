@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Trade\Domain\Lot\Repository;
 
-use CoreKit\Domain\Entity\Id;
+use Trade\Domain\Lot\Entity\Lot;
 
 /**
  * DTO для передачи данных лота с его выделенными ставками из репозитория
@@ -12,11 +12,11 @@ use CoreKit\Domain\Entity\Id;
 final readonly class LotWithAllocatedBidsDto
 {
     /**
-     * @param Id $lotId
+     * @param Lot $lot Заблокированная entity лота (FOR UPDATE)
      * @param array<AllocatedBidDto> $allocatedBids
      */
     public function __construct(
-        public Id $lotId,
+        public Lot $lot,
         public array $allocatedBids,
     ) {}
 }
