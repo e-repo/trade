@@ -1,6 +1,6 @@
 parameters:
     app.email: '%env(APP_EMAIL)%'
-    app.timezone: 'Europe/Moscow'
+    app.timezone: 'UTC'
 
 services:
     _defaults:

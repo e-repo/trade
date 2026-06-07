@@ -22,15 +22,6 @@ use Trade\Application\Bid\Command\PlaceBid\Command;
     requestBody: new OA\RequestBody(
         content: new OA\JsonContent(ref: new Model(type: Request::class))
     ),
-    parameters: [
-        new OA\Parameter(
-            name: 'x-user-id',
-            description: 'Идентификатор контрагента',
-            in: 'header',
-            required: true,
-            schema: new OA\Schema(type: 'string', format: 'uuid')
-        ),
-    ],
     responses: [
         new OA\Response(
             response: 200,

@@ -64,24 +64,55 @@ Module/
 ```
 Trade/
 ├── UI/
-│   ├── Http/V1/          # HTTP endpoints (Actions, Request/Response DTOs)
-│   └── Console/          # Console commands
-├── Application/          # Commands, Queries, Handlers
+│   ├── Http/V1/
+│   │   ├── Lot/Create/        # POST /api/v1/trade/lot - Create lot
+│   │   ├── Lot/Get/           # GET /api/v1/trade/lot/{lotId} - Get lot with winners
+│   │   └── Bid/PlaceBid/      # POST /api/v1/trade/bid - Place bid
+│   └── Console/
+│       ├── OpenLotsCommand.php           # trade:open-lots
+│       └── CalculateWinnersCommand.php   # trade:calculate-winners
+├── Application/
+│   ├── Lot/Command/           # Create, Open, CloseDueLots
+│   ├── Lot/Query/             # Get
+│   └── Bid/Command/           # PlaceBid, CalculateAllocations
 ├── Domain/
-│   ├── Dictionary/       # Reference entities (справочники)
+│   ├── Dictionary/       # Reference entities
 │   │   ├── Entity/       # CargoType, Contractor, VolumeStep
 │   │   └── Repository/   # Repository interfaces
-│   └── Lot/              # Lot aggregate
-│       ├── Entity/       # Lot entity
+│   └── Lot/              # Lot aggregate (Lot + Bid entities)
+│       ├── Entity/       # Lot, Bid
 │       ├── Repository/   # LotRepositoryInterface
 │       ├── Enum/         # LotStatusEnum, CloseReasonEnum
 │       └── ValueObject/  # Volume, Price, LotTermination
 └── Infra/
-    ├── Dictionary/
-    │   └── Repository/   # Repository implementations for dictionaries
-    └── Lot/
-        └── Repository/   # LotRepository implementation
+    ├── Dictionary/Repository/ # Dictionary repository implementations
+    └── Lot/Repository/        # LotRepository (with N+1 optimization)
 ```
+
+### Trade Module Features
+
+**Business Logic:**
+- Reverse auction system for cargo transportation
+- Lot lifecycle: PENDING → OPEN → CLOSED
+- Automatic lot opening/closing by schedule
+- Winner calculation with volume allocation algorithm
+- Pessimistic locking (SELECT FOR UPDATE) for concurrency safety
+
+**Key Endpoints:**
+- Create lot with volume, price, schedule
+- Place bids with price per ton and desired volume
+- Get lot details with winner contractor IDs (empty array if not closed)
+
+**Console Commands:**
+- `trade:open-lots` - Opens lots when opensAt time arrives
+- `trade:calculate-winners` - Closes expired lots and calculates winners with batch processing (100 lots per batch)
+
+**Performance Optimizations:**
+- `findLotsToCloseIterator` uses 3-step batch loading to eliminate N+1 queries:
+  1. SELECT lot IDs with FOR UPDATE
+  2. Load Lot entities via Doctrine
+  3. Load allocated bids with single IN query
+- Result: 3 queries per batch instead of N+1
 
 ## Code Patterns & Examples
 
@@ -477,7 +508,7 @@ _instanceof:
 ### Authentication
 - Template does NOT include authentication
 - Assumes external Gateway service handles authorization
-- Use `x-user-id` header for user identification
+- Use `x-user-id` header for user identification (configured in Swagger UI)
 
 ### Concurrency
 - Use pessimistic locking for concurrent operations: `SELECT ... FOR UPDATE`

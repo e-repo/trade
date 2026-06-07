@@ -2,8 +2,8 @@
 
 ## 📍 Текущий статус разработки
 
-**Дата последнего обновления:** 2026-06-06
-**Текущий этап:** Console Command #2 (trade:calculate-winners) - РЕАЛИЗАЦИЯ ЗАВЕРШЕНА, требуются интеграционные тесты
+**Дата последнего обновления:** 2026-06-07
+**Текущий этап:** Все основные функции реализованы, модуль Trade полностью функционален
 
 ---
 
@@ -733,5 +733,283 @@ Carbon::setTestNow();
 
 ---
 
+---
+
+## ✅ Endpoint #3: GET /api/v1/trade/lot/{lotId} (ПОЛНОСТЬЮ ЗАВЕРШЕН)
+
+**Статус:** ✅ **ЗАВЕРШЕН: РЕАЛИЗАЦИЯ + ТЕСТИРОВАНИЕ (2026-06-07)**
+
+**Назначение:** Получение детальной информации о лоте с массивом ID победителей
+
+**Что реализовано:**
+
+### 1. Domain Layer ✅
+
+- ✅ **LotDetailsDto** (`src/Trade/Domain/Lot/Repository/LotDetailsDto.php`):
+  - DTO для передачи данных лота из репозитория в Application слой
+  - Поля: lotId, status, totalVolume, startPrice, priceStep, opensAt, closesAt, closeReason, winnerContractorIds
+  - Все ID объекты доменного типа `Id`
+
+- ✅ **LotRepositoryInterface::getLotDetails()** (`src/Trade/Domain/Lot/Repository/LotRepositoryInterface.php`):
+  - Метод получения деталей лота с ID победителей
+
+### 2. Infra Layer ✅
+
+- ✅ **LotRepository::getLotDetails()** (`src/Trade/Infra/Lot/Repository/LotRepository.php:142`):
+  - **Нативный SQL через DBAL** с JOIN на bid
+  - Выборка базовой информации лота + массив contractor_id победителей
+  - Фильтр: `b.allocated_volume > 0` - только выделенные ставки
+  - Сортировка победителей: price_per_ton ASC, created_at ASC
+  - Маппинг результата в `LotDetailsDto`
+  - Выбрасывает `NotFoundException` если лот не найден
+
+### 3. Application Layer ✅
+
+- ✅ **Query** (`src/Trade/Application/Lot/Query/Get/Query.php`):
+  - CQRS query с параметром `lotId: Id`
+
+- ✅ **Result** (`src/Trade/Application/Lot/Query/Get/Result.php`):
+  - Application DTO с конвертацией `Id` → `string`
+  - Поля: lotId, status, totalVolume, startPrice, priceStep, opensAt, closesAt, closeReason, winnerContractorIds
+
+- ✅ **Handler** (`src/Trade/Application/Lot/Query/Get/Handler.php`):
+  - Реализует QueryHandlerInterface
+  - Вызывает `getLotDetails()` из репозитория
+  - Маппинг `LotDetailsDto` → `Result` (конвертация Id objects в strings)
+
+### 4. UI Layer (HTTP API) ✅
+
+- ✅ **Response** (`src/Trade/UI/Http/V1/Lot/Get/Response.php`):
+  - Реализует ResponseInterface
+  - **UTC timestamps** (int): opensAt, closesAt
+  - OpenAPI аннотации с примерами
+  - Поле `winnerContractorIds: array<string>` - пустой массив если лот не закрыт
+
+- ✅ **Action** (`src/Trade/UI/Http/V1/Lot/Get/Action.php`):
+  - Route: `GET /api/v1/trade/lot/{lotId}` (name: `trade_get-lot`)
+  - OpenAPI документация (tag: `Trade - Лоты`)
+  - **UUID валидация**: `Uuid::isValid()` с возвратом HTTP 400
+  - Конвертация DateTimeImmutable → Unix timestamp UTC
+  - Маппинг Result → Response
+  - Обёртка ResponseWrapper
+
+### 5. Integration Tests ✅
+
+**Директория:** `tests/Test/Integration/Trade/Api/GetLot/`
+
+**Фикстуры созданы:**
+- ✅ `CargoTypeFixture.php`, `VolumeStepFixture.php`, `ContractorFixture.php`
+- ✅ `LotFixture.php` - 2 лота (один OPEN, один CLOSED с победителями)
+- ✅ `BidFixture.php` - 5 ставок (2 с allocated_volume для победителей, 3 вытесненные с allocated_volume = 0)
+
+**Тесты реализованы (4 сценария, 33 assertions):**
+1. ✅ `testSuccessGetOpenLot` - получение открытого лота (пустой массив победителей)
+2. ✅ `testSuccessGetClosedLotWithWinners` - получение закрытого лота с 2 победителями
+3. ✅ `testFailedLotNotFound` - несуществующий лот (HTTP 404)
+4. ✅ `testFailedInvalidUuid` - невалидный UUID (HTTP 400)
+
+**Результат:** ✅ Все тесты проходят успешно (Tests: 4, Assertions: 33)
+
+### 6. Bug Fixes ✅
+
+- ✅ Исправлен конфликт импортов в Action.php (удален import `Symfony\Component\HttpFoundation\Response`)
+- ✅ Добавлена UUID валидация с `BadRequestHttpException` для HTTP 400
+
+---
+
+## ✅ Оптимизация N+1 запросов в CloseDueLots (ЗАВЕРШЕНА)
+
+**Статус:** ✅ **ЗАВЕРШЕН (2026-06-07)**
+
+**Проблема:** N+1 запросов при вызове `lockForUpdate($lotId)` внутри цикла в `CloseDueLots/Handler.php`
+
+**Решение:** Рефакторинг `findLotsToCloseIterator()` на 3-шаговую батчевую загрузку
+
+### Изменения ✅
+
+**1. LotWithAllocatedBidsDto обновлен:**
+- ✅ Было: `public Id $lotId`
+- ✅ Стало: `public Lot $lot` - сущность лота вместо ID
+- ✅ Удалены лишние импорты
+
+**2. LotRepository::findLotsToCloseIterator() переписан:**
+- ✅ **Шаг 1**: SELECT lot IDs с `FOR UPDATE` (блокировка строк в PostgreSQL)
+  ```sql
+  SELECT l.id FROM trade.lot l
+  WHERE l.status = :status AND l.termination_closes_at <= :now
+  ORDER BY l.id
+  LIMIT :limit OFFSET :offset
+  FOR UPDATE
+  ```
+- ✅ **Шаг 2**: Загрузка Lot entities через Doctrine QueryBuilder по заблокированным ID
+  ```php
+  $lots = $lotQueryBuilder->select('l')
+      ->from(Lot::class, 'l')
+      ->where($lotQueryBuilder->expr()->in('l.id', ':ids'))
+      ->setParameter('ids', $lotIds)
+      ->getQuery()
+      ->getResult();
+  ```
+- ✅ **Шаг 3**: Загрузка allocated bids одним IN-запросом
+  ```sql
+  SELECT bid.* FROM trade.bid b
+  WHERE b.lot_id IN (:lot_ids) AND b.allocated_volume > 0
+  ORDER BY b.lot_id, b.price_per_ton ASC, b.created_at ASC
+  ```
+- ✅ Индексирование лотов по ID для O(1) доступа: `$lotsById[$lot->getId()->value] = $lot`
+- ✅ Группировка ставок по lot_id
+- ✅ Yield `LotWithAllocatedBidsDto` с предзагруженной сущностью Lot
+
+**3. CloseDueLots/Handler.php упрощен:**
+- ✅ Было: `$lot = $this->lotRepository->lockForUpdate($lotData->lotId);` - дополнительный запрос
+- ✅ Стало: `$lot = $lotData->lot;` - лот уже загружен и заблокирован
+
+**4. Улучшение именования:**
+- ✅ Было: `$qb1`, `$qb2` - плохая практика в PHP
+- ✅ Стало: `$lotQueryBuilder` - понятное имя
+
+### Результат оптимизации ✅
+
+- ✅ **Было**: N+1 запросов (1 для выборки ID + N вызовов lockForUpdate)
+- ✅ **Стало**: 3 запроса на батч (независимо от размера батча 100 лотов):
+  1. SELECT IDs с FOR UPDATE
+  2. SELECT Lot entities по IDs
+  3. SELECT allocated bids по lot_ids
+- ✅ Производительность: O(3) вместо O(N+1)
+- ✅ Все тесты проходят: 35 тестов, 231 assertions
+
+---
+
+## ✅ Обновление конфигурации Swagger UI (ЗАВЕРШЕНО)
+
+**Статус:** ✅ **ЗАВЕРШЕН (2026-06-07)**
+
+**Задача:** Заменить форму Bearer token на header-based аутентификацию через `x-user-id`
+
+### Изменения ✅
+
+**Файл:** `config/packages/nelmio_api_doc.yaml`
+
+- ✅ **Было**:
+  ```yaml
+  securitySchemes:
+      Bearer:
+          type: http
+          scheme: bearer
+  security:
+      - Bearer: []
+  ```
+
+- ✅ **Стало**:
+  ```yaml
+  securitySchemes:
+      UserIdHeader:
+          type: apiKey
+          in: header
+          name: x-user-id
+          description: 'UUID пользователя от имени которого выполняется запрос'
+  security:
+      - UserIdHeader: []
+  ```
+
+### Результат ✅
+
+- ✅ В Swagger UI (http://localhost:8088/api/doc) кнопка "Authorize" позволяет указать UUID пользователя
+- ✅ UUID автоматически подставляется в заголовок `x-user-id` для всех запросов
+- ✅ Соответствует архитектуре проекта (внешний Gateway управляет авторизацией)
+
+---
+
+## ✅ Обновление документации (ЗАВЕРШЕНО)
+
+**Статус:** ✅ **ЗАВЕРШЕН (2026-06-07)**
+
+### README.md актуализирован ✅
+
+- ✅ Добавлен модуль `Trade` в список текущих модулей
+- ✅ Упомянут заголовок `x-user-id` в разделе авторизации
+- ✅ Добавлена схема `trade` в организацию БД
+- ✅ Создан новый большой раздел "Модуль Trade - Торговая система" с описанием:
+  - HTTP endpoints (POST /lot, GET /lot/{id}, POST /bid)
+  - Console commands (trade:open-lots, trade:calculate-winners)
+  - Бизнес-логики (Лот, Ставка, Расчёт победителей)
+  - Структуры модуля
+  - Оптимизаций производительности (батчинг, N+1 elimination)
+
+### Claude.md актуализирован ✅
+
+- ✅ Упомянута конфигурация `x-user-id` в Swagger UI
+- ✅ Расширен раздел "Trade Module Structure" с endpoints и командами
+- ✅ Добавлен раздел "Trade Module Features" с описанием:
+  - Бизнес-логики (reverse auction, lifecycle, locking)
+  - Ключевых endpoints
+  - Console команд с батчевой обработкой
+  - Оптимизации производительности (3-step batch loading)
+
+---
+
+## 📊 Финальная статистика модуля Trade
+
+**Общее количество тестов:** 35 (24 API + 11 Console)
+**Общее количество assertions:** 231
+
+### Разбивка по компонентам:
+
+1. **CreateLot API** - 12 тестов, 45 assertions
+2. **PlaceBid API** - 7 тестов, 56 assertions
+3. **GetLot API** - 4 теста, 33 assertions
+4. **OpenLots Console** - 5 тестов, 29 assertions
+5. **CalculateWinners Console** - 6 тестов, 73 assertions
+
+**Покрытие функциональности:**
+- ✅ Создание лотов с валидацией (12 сценариев)
+- ✅ Размещение ставок с вытеснением (7 сценариев)
+- ✅ Получение лота с победителями (4 сценария)
+- ✅ Автоматическое открытие лотов (5 сценариев)
+- ✅ Закрытие лотов и определение победителей (6 сценариев)
+
+---
+
+## 🎯 Итоговый статус модуля Trade
+
+### Реализованные функции ✅
+
+1. ✅ **POST /api/v1/trade/lot** - Создание лота
+2. ✅ **POST /api/v1/trade/bid** - Размещение ставки
+3. ✅ **GET /api/v1/trade/lot/{lotId}** - Получение лота с победителями
+4. ✅ **trade:open-lots** - Автоматическое открытие лотов
+5. ✅ **trade:calculate-winners** - Закрытие лотов и расчёт победителей
+
+### Архитектурные улучшения ✅
+
+- ✅ Четырехслойная архитектура (UI → Application → Domain ← Infra)
+- ✅ CQRS с тремя шинами (command.bus, query.bus, event.bus)
+- ✅ Доменные события (LotOpenedEvent, LotClosedEvent, WinnerDeterminatedEvent)
+- ✅ Strategy Pattern для алгоритма размещения ставок
+- ✅ Пессимистические блокировки для конкурентного доступа
+- ✅ Batch processing с оптимизацией N+1 запросов
+- ✅ DTO для разделения слоев (Domain → Application → UI)
+- ✅ UUID валидация с корректными HTTP статусами
+
+### Производительность ✅
+
+- ✅ Батчевая обработка лотов (100 шт за раз)
+- ✅ 3-step batch loading: O(3) вместо O(N+1)
+- ✅ Нативный SQL через DBAL для сложных выборок
+- ✅ Фильтрация на уровне SQL вместо PHP
+- ✅ Минимальная выборка данных (только нужные поля)
+- ✅ Индексация для O(1) доступа в памяти
+
+### Качество кода ✅
+
+- ✅ 35 интеграционных тестов (231 assertion)
+- ✅ PSR-12 code style
+- ✅ Строгая типизация (strict_types=1)
+- ✅ OpenAPI документация для всех endpoints
+- ✅ Event logging в JSON формате (var/log/events.log)
+- ✅ Carbon для мокирования времени в тестах
+
+---
+
 **Дата создания:** 2026-04-26
-**Дата последнего обновления:** 2026-06-06 (команда trade:calculate-winners: полностью завершена с тестами и рефакторингом на Carbon)
+**Дата последнего обновления:** 2026-06-07 (модуль Trade полностью завершен: 3 endpoints, 2 console команды, оптимизация N+1, обновление документации)

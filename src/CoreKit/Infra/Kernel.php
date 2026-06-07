@@ -14,6 +14,6 @@ class Kernel extends BaseKernel
     public function boot(): void
     {
         parent::boot();
-        date_default_timezone_set('Europe/Moscow');
+        date_default_timezone_set('UTC');
     }
 }
