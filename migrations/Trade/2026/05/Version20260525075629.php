@@ -36,7 +36,6 @@ final class Version20260525075629 extends AbstractMigration
     public function down(Schema $schema): void
     {
         // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql('CREATE SCHEMA module');
         $this->addSql('ALTER TABLE trade.bid DROP CONSTRAINT FK_BF1B5056A8CBA5F7');
         $this->addSql('ALTER TABLE trade.bid DROP CONSTRAINT FK_BF1B5056B0265DC7');
         $this->addSql('DROP TABLE trade.bid');

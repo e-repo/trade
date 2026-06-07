@@ -40,7 +40,6 @@ final class Version20260521073725 extends AbstractMigration
     public function down(Schema $schema): void
     {
         // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql('CREATE SCHEMA module');
         $this->addSql('ALTER TABLE trade.lot DROP CONSTRAINT FK_FE68CABECD33D8BC');
         $this->addSql('ALTER TABLE trade.lot DROP CONSTRAINT FK_FE68CABE188D3AC4');
         $this->addSql('DROP TABLE trade.lot');

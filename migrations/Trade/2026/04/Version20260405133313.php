@@ -21,7 +21,6 @@ final class Version20260405133313 extends AbstractMigration
     {
         // this up() migration is auto-generated, please modify it to your needs
         $this->addSql('CREATE SCHEMA trade');
-        $this->addSql('CREATE SCHEMA module');
         $this->addSql('CREATE TABLE trade.cargo_type (id UUID NOT NULL, name VARCHAR(100) NOT NULL, created_at TIMESTAMP(0) WITHOUT TIME ZONE NOT NULL, updated_at TIMESTAMP(0) WITHOUT TIME ZONE DEFAULT NULL, PRIMARY KEY(id))');
         $this->addSql('CREATE UNIQUE INDEX UNIQ_CD621D1A5E237E06 ON trade.cargo_type (name)');
         $this->addSql('COMMENT ON COLUMN trade.cargo_type.id IS \'(DC2Type:uuid)\'');
@@ -43,7 +42,6 @@ final class Version20260405133313 extends AbstractMigration
     {
         // this down() migration is auto-generated, please modify it to your needs
         $this->addSql('DROP TABLE trade.cargo_type');
-        $this->addSql('DROP TABLE module.category');
         $this->addSql('DROP TABLE trade.contractor');
         $this->addSql('DROP TABLE trade.volume_step');
     }

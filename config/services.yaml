@@ -38,12 +38,6 @@ services:
         arguments:
             $eventLogger: '@monolog.logger.event_bus'
 
-    SomeModule\:
-        resource: '../src/SomeModule'
-        exclude:
-            - '../src/SomeModule/{Kernel.php,*Dto.php}'
-            - '../src/SomeModule/{Entity,Enum,Event}'
-
     CoreKit\:
         resource: '../src/CoreKit'
         exclude:

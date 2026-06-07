@@ -4,5 +4,4 @@ doctrine_migrations:
         # namespace is arbitrary but should be different from App\Migrations
         # as migrations classes should NOT be autoloaded
         'DoctrineMigrations\Trade': '%kernel.project_dir%/migrations/Trade'
-        'DoctrineMigrations\SomeModule': '%kernel.project_dir%/migrations/SomeModule'
     enable_profiler: false
