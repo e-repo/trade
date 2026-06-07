@@ -30,4 +30,6 @@ interface LotRepositoryInterface
      * @return \Generator<LotWithAllocatedBidsDto>
      */
     public function findLotsToCloseIterator(DateTimeImmutable $now, int $batchSize = 100): \Generator;
+
+    public function getLotDetails(Id $lotId): LotDetailsDto;
 }

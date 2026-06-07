@@ -12,6 +12,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Trade\Domain\Lot\Entity\Lot;
 use Trade\Domain\Lot\Enum\LotStatusEnum;
 use Trade\Domain\Lot\Repository\AllocatedBidDto;
+use Trade\Domain\Lot\Repository\LotDetailsDto;
 use Trade\Domain\Lot\Repository\LotRepositoryInterface;
 use Trade\Domain\Lot\Repository\LotWithAllocatedBidsDto;
 
@@ -163,5 +164,56 @@ final class LotRepository implements LotRepositoryInterface
 
             $offset += $batchSize;
         }
+    }
+
+    public function getLotDetails(Id $lotId): LotDetailsDto
+    {
+        $connection = $this->em->getConnection();
+
+        $sql = <<<SQL
+            SELECT
+                l.id as lot_id,
+                l.status,
+                l.volume_total_volume as total_volume,
+                l.price_start_price as start_price,
+                l.price_price_step as price_step,
+                l.opens_at,
+                l.termination_closes_at,
+                l.termination_close_reason as close_reason,
+                COALESCE(
+                    json_agg(DISTINCT b.contractor_id) FILTER (WHERE b.allocated_volume > 0),
+                    '[]'
+                ) as winner_contractor_ids
+            FROM trade.lot l
+            LEFT JOIN trade.bid b ON b.lot_id = l.id
+            WHERE l.id = :lot_id
+            GROUP BY l.id
+        SQL;
+
+        $result = $connection->fetchAssociative($sql, [
+            'lot_id' => $lotId->value,
+        ]);
+
+        if ($result === false) {
+            throw new NotFoundException('Lot not found');
+        }
+
+        $winnerContractorIdsRaw = json_decode($result['winner_contractor_ids'], true);
+        $winnerContractorIds = array_map(
+            fn(string $id) => new Id($id),
+            $winnerContractorIdsRaw
+        );
+
+        return new LotDetailsDto(
+            lotId: new Id($result['lot_id']),
+            status: $result['status'],
+            totalVolume: (int) $result['total_volume'],
+            startPrice: (int) $result['start_price'],
+            priceStep: (int) $result['price_step'],
+            opensAt: new \DateTimeImmutable($result['opens_at']),
+            closesAt: new \DateTimeImmutable($result['termination_closes_at']),
+            closeReason: $result['close_reason'],
+            winnerContractorIds: $winnerContractorIds,
+        );
     }
 }
